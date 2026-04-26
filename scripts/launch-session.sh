@@ -88,8 +88,12 @@ fi
 echo "[4/5] Arranging windows..."
 sleep 4
 osascript << 'APPLESCRIPT'
-tell application "Safari" to activate
-delay 0.3
+tell application "Safari"
+    activate
+    delay 0.5
+    open location "http://localhost:8340"
+    delay 0.5
+end tell
 tell application "System Events" to tell process "Safari"
     set size of front window to {959, 579}
     set position of front window to {0, 30}

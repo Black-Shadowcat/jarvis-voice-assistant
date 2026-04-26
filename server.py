@@ -9,6 +9,7 @@ import base64
 import json
 import os
 import re
+import subprocess
 import time
 
 import anthropic
@@ -59,14 +60,16 @@ def get_weather_sync():
 
 
 def get_tasks_sync():
-    """Read open tasks from Obsidian (sync)."""
-    if not TASKS_FILE:
-        return []
+    """Read open reminders from macOS Reminders Inbox."""
     try:
-        tasks_path = os.path.join(TASKS_FILE, "Tasks.md")
-        with open(tasks_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        return [l.strip().replace("- [ ]", "").strip() for l in lines if l.strip().startswith("- [ ]")]
+        result = subprocess.run(
+            ["osascript", "-e",
+             'tell application "Reminders" to get name of every reminder of list "Inbox" whose completed is false'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return [i.strip() for i in result.stdout.strip().split(",") if i.strip()]
+        return []
     except:
         return []
 
@@ -109,6 +112,8 @@ AKTIONEN - Schreibe die passende Aktion ans ENDE deiner Antwort. Der Text VOR de
 [ACTION:OPEN] url - URL im Browser oeffnen
 [ACTION:SCREEN] - Bildschirm ansehen und beschreiben. WICHTIG: Bei SCREEN schreibe NUR die Aktion, KEINEN Text davor. Also NUR "[ACTION:SCREEN]" und sonst nichts.
 [ACTION:NEWS] - Aktuelle Weltnachrichten abrufen. Nutze diese Aktion wenn nach News, Nachrichten, was in der Welt passiert, aktuelle Lage oder Weltgeschehen gefragt wird. Schreibe einen kurzen Satz davor wie "Ich schaue nach den aktuellen Nachrichten."
+[ACTION:REMINDER_ADD] aufgabe - Neue Erinnerung in die Inbox schreiben. Nutze diese Aktion wenn Sir etwas hinzufuegen, notieren, merken oder erinnert werden moechte.
+[ACTION:REMINDER_DONE] stichwort - Erinnerung als erledigt markieren. Nutze diese Aktion wenn Sir sagt dass etwas erledigt, abgehakt oder fertig ist.
 
 WENN Julian "Jarvis activate" sagt:
 - Begruesse ihn passend zur Tageszeit (aktuelle Zeit: {{time}}).
@@ -202,6 +207,34 @@ async def execute_action(action: dict) -> str:
     elif t == "NEWS":
         result = await browser_tools.fetch_news()
         return result
+
+    elif t == "REMINDER_ADD":
+        title = p.replace('"', '').replace("'", "").strip()
+        result = subprocess.run(
+            ["osascript", "-e",
+             f'tell application "Reminders" to make new reminder at list "Inbox" with properties {{name:"{title}"}}'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            global TASKS_INFO
+            TASKS_INFO = get_tasks_sync()
+            return f"Erinnerung hinzugefügt: {title}"
+        return "Fehler beim Hinzufügen der Erinnerung"
+
+    elif t == "REMINDER_DONE":
+        keyword = p.replace('"', '').replace("'", "").strip()
+        script = f'''tell application "Reminders"
+    repeat with r in (reminders of list "Inbox" whose completed is false)
+        if name of r contains "{keyword}" then
+            set completed of r to true
+        end if
+    end repeat
+end tell'''
+        result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            TASKS_INFO = get_tasks_sync()
+            return f"Erinnerung abgehakt: {keyword}"
+        return "Fehler beim Abhaken der Erinnerung"
 
     return ""
 
