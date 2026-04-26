@@ -67,7 +67,7 @@ fi
 echo "  → Browser opened"
 
 # 3. Open configured apps
-echo "[3/4] Opening apps..."
+echo "[3/5] Opening apps..."
 if [[ -n "$APPS" ]]; then
     # Split comma-separated apps
     IFS=',' read -ra APP_ARRAY <<< "$APPS"
@@ -84,14 +84,47 @@ else
     open -a "Music"
 fi
 
-# 4. Start mic mute menu bar button
-echo "[4/4] Starting mic mute button..."
+# 4. Arrange windows in 4 equal quadrants
+echo "[4/5] Arranging windows..."
+sleep 4
+osascript << 'APPLESCRIPT'
+tell application "Safari" to activate
+delay 0.3
+tell application "System Events" to tell process "Safari"
+    set size of front window to {959, 579}
+    set position of front window to {0, 30}
+end tell
+
+tell application "System Events" to tell process "Code"
+    set size of front window to {959, 579}
+    set position of front window to {961, 30}
+end tell
+
+tell application "Mail" to activate
+delay 0.3
+tell application "System Events" to tell process "Mail"
+    set size of front window to {959, 580}
+    set position of front window to {0, 611}
+end tell
+
+tell application "Home Assistant" to activate
+delay 0.3
+tell application "System Events" to tell process "Home Assistant"
+    set size of front window to {959, 580}
+    set position of front window to {961, 611}
+end tell
+APPLESCRIPT
+echo "  → Windows arranged"
+
+# 5. Start mic mute menu bar button
+echo "[5/5] Starting mic mute button..."
 if ! pgrep -f "mic-mute-menubar.py" > /dev/null; then
     nohup /opt/homebrew/bin/python3.11 "$SCRIPT_DIR/mic-mute-menubar.py" > /tmp/mic-mute.log 2>&1 &
     echo "  → Mic mute button started"
 else
     echo "  → Mic mute button already running"
 fi
+
 
 echo ""
 echo "========================================"
