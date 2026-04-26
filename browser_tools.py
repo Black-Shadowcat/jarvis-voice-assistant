@@ -15,15 +15,12 @@ _context = None
 
 
 def _bring_chromium_to_front():
-    """Bring the Playwright Chromium window to the foreground on Windows."""
+    """Bring the Playwright Chromium window to the foreground on macOS."""
     try:
+        # Use AppleScript to bring Chrome to front on macOS
         subprocess.run([
-            "powershell", "-Command",
-            '(Get-Process -Name "chromium","chrome" -ErrorAction SilentlyContinue | '
-            'Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -Last 1).MainWindowHandle | '
-            'ForEach-Object { Add-Type "using System; using System.Runtime.InteropServices; '
-            'public class W { [DllImport(\\\"user32.dll\\\")] public static extern bool SetForegroundWindow(IntPtr h); }"; '
-            '[W]::SetForegroundWindow($_) }'
+            "osascript", "-e",
+            'tell application "Google Chrome" to activate'
         ], capture_output=True, timeout=3)
     except Exception:
         pass

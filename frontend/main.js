@@ -2,11 +2,26 @@
 const orb = document.getElementById('orb');
 const status = document.getElementById('status');
 const transcript = document.getElementById('transcript');
+const muteBtn = document.getElementById('mute-btn');
 
 let ws;
 let audioQueue = [];
 let isPlaying = false;
 let audioUnlocked = false;
+let isMuted = false;
+
+// Mute button functionality
+muteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    isMuted = !isMuted;
+    muteBtn.textContent = isMuted ? '🔇' : '🎤';
+    muteBtn.title = isMuted ? 'Mikrofon einschalten' : 'Mikrofon auschalten';
+    muteBtn.style.opacity = isMuted ? '0.5' : '1';
+    if (isMuted && isListening) {
+        recognition.stop();
+        isListening = false;
+    }
+});
 
 // Unlock audio on ANY user interaction
 function unlockAudio() {

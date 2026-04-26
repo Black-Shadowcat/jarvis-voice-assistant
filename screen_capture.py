@@ -1,19 +1,34 @@
 """
-Jarvis V2 — Screen Capture
+Jarvis V2 — Screen Capture (macOS)
 Takes screenshots and describes them via Claude Vision.
 """
 
 import base64
 import io
-from PIL import ImageGrab
+import subprocess
 
-
+# Try macOS screenshot command first, fallback to PIL
 def capture_screen() -> bytes:
     """Capture the entire screen, return PNG bytes."""
-    img = ImageGrab.grab()
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return buf.getvalue()
+    try:
+        # Use macOS screenshot command
+        result = subprocess.run(
+            ["screencapture", "-x", "-t", "png", "/tmp/jarvis_capture.png"],
+            capture_output=True,
+            check=True
+        )
+        with open("/tmp/jarvis_capture.png", "rb") as f:
+            return f.read()
+    except Exception:
+        # Fallback to PIL (if available)
+        try:
+            from PIL import ImageGrab
+            img = ImageGrab.grab()
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return buf.getvalue()
+        except Exception:
+            raise RuntimeError("Screenshot capture failed. Install PIL or use macOS native.")
 
 
 async def describe_screen(anthropic_client) -> str:

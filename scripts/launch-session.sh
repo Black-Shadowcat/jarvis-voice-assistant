@@ -1,0 +1,102 @@
+#!/bin/zsh
+# JARVIS — Launch Session (macOS)
+# Starts FastAPI server, browser, and configured apps
+
+# Get the directory where this script is located
+SCRIPT_DIR="${0:A:h}"
+WORKSPACE_PATH="$(dirname "$SCRIPT_DIR")"
+
+# Load config if exists
+CONFIG_FILE="$WORKSPACE_PATH/config.json"
+if [[ -f "$CONFIG_FILE" ]]; then
+    # Extract values using python (more reliable than parsing JSON in shell)
+    SPOTIFY_TRACK=$(python3.11 -c "import json; c=json.load(open('$CONFIG_FILE')); print(c.get('spotify_track',''))" 2>/dev/null)
+    BROWSER_URL=$(python3.11 -c "import json; c=json.load(open('$CONFIG_FILE')); print(c.get('browser_url',''))" 2>/dev/null)
+    APPS=$(python3.11 -c "import json; c=json.load(open('$CONFIG_FILE')); print(','.join(c.get('apps',[])))" 2>/dev/null)
+else
+    echo "[jarvis] Warning: config.json not found, using defaults"
+    SPOTIFY_TRACK=""
+    BROWSER_URL=""
+    APPS=""
+fi
+
+SERVER_URL="http://localhost:8340"
+
+echo "========================================"
+echo "JARVIS Launch Session (macOS)"
+echo "========================================"
+echo "Workspace: $WORKSPACE_PATH"
+echo ""
+
+# Function to check if server is running
+is_server_running() {
+    curl -s -o /dev/null -w "%{http_code}" "$SERVER_URL" 2>/dev/null | grep -q "200" && return 0 || return 1
+}
+
+# 1. Start FastAPI server if not running
+echo "[1/4] Starting FastAPI server..."
+if is_server_running; then
+    echo "  → Server already running at $SERVER_URL"
+else
+    cd "$WORKSPACE_PATH"
+    nohup /opt/homebrew/bin/python3.11 server.py > /tmp/jarvis-server.log 2>&1 &
+    SERVER_PID=$!
+    echo "  → Server started (PID: $SERVER_PID)"
+    
+    # Wait for server to be ready
+    echo "  → Waiting for server..."
+    for i in {1..10}; do
+        sleep 1
+        if is_server_running; then
+            echo "  → Server ready!"
+            break
+        fi
+        if [[ $i -eq 10 ]]; then
+            echo "  → Warning: Server may not be ready"
+        fi
+    done
+fi
+
+# 2. Open browser
+echo "[2/4] Opening browser..."
+open "$SERVER_URL"
+if [[ -n "$BROWSER_URL" ]]; then
+    sleep 2
+    open "$BROWSER_URL"
+fi
+echo "  → Browser opened"
+
+# 3. Open configured apps
+echo "[3/4] Opening apps..."
+if [[ -n "$APPS" ]]; then
+    # Split comma-separated apps
+    IFS=',' read -ra APP_ARRAY <<< "$APPS"
+    for app in "${APP_ARRAY[@]}"; do
+        echo "  → Opening: $app"
+        open -a "$app" 2>/dev/null || open "/System/Applications/${app}.app" 2>/dev/null
+    done
+else
+    # Default apps
+    echo "  → Opening default apps: Mail, Safari, VS Code, Music"
+    open -a "Mail"
+    open -a "Safari"
+    open -a "Visual Studio Code"
+    open -a "Music"
+fi
+
+# 4. Start mic mute menu bar button
+echo "[4/4] Starting mic mute button..."
+if ! pgrep -f "mic-mute-menubar.py" > /dev/null; then
+    nohup /opt/homebrew/bin/python3.11 "$SCRIPT_DIR/mic-mute-menubar.py" > /tmp/mic-mute.log 2>&1 &
+    echo "  → Mic mute button started"
+else
+    echo "  → Mic mute button already running"
+fi
+
+echo ""
+echo "========================================"
+echo "JARVIS session started!"
+echo "========================================"
+echo "Server: $SERVER_URL"
+echo ""
+echo "Press Ctrl+C to stop server (optional)"
