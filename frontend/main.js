@@ -149,6 +149,7 @@ if (SpeechRecognition) {
 
 function startListening() {
     if (isPlaying) return;
+    if (isMuted) return;  // Don't start if muted
     try {
         recognition.start();
         isListening = true;
@@ -159,6 +160,10 @@ function startListening() {
 
 orb.addEventListener('click', () => {
     if (isPlaying) return;
+    if (isMuted) {
+        status.textContent = 'Mikrofon ist stumm. Klicke auf 🎤 um zu aktivieren.';
+        return;
+    }
     if (isListening) {
         recognition.stop();
         isListening = false;
