@@ -145,6 +145,7 @@ AKTIONEN - Schreibe die passende Aktion ans ENDE deiner Antwort. Der Text VOR de
 [ACTION:NEWS] - Aktuelle Weltnachrichten abrufen. Nutze diese Aktion wenn nach News, Nachrichten, was in der Welt passiert, aktuelle Lage oder Weltgeschehen gefragt wird. Schreibe einen kurzen Satz davor wie "Ich schaue nach den aktuellen Nachrichten."
 [ACTION:REMINDER_ADD] aufgabe - Neue Erinnerung in die Inbox schreiben. Nutze diese Aktion wenn Sir etwas hinzufuegen, notieren, merken oder erinnert werden moechte.
 [ACTION:REMINDER_DONE] stichwort - Erinnerung als erledigt markieren. Nutze diese Aktion wenn Sir sagt dass etwas erledigt, abgehakt oder fertig ist.
+[ACTION:TASKS_LIST] - Aktuelle Aufgabenliste live aus Reminders laden und vorlesen. Nutze diese Aktion IMMER wenn Sir fragt welche Aufgaben es gibt, was auf der Liste steht, oder was noch offen ist.
 [ACTION:MAIL_READ] stichwort - Mails lesen. Ohne Stichwort: alle Ungelesenen auflisten. Mit Stichwort (z.B. Absendername): Inhalt der passenden Mail vorlesen.
 
 WENN {USER_NAME} "Jarvis activate" sagt:
@@ -240,6 +241,12 @@ async def execute_action(action: dict) -> str:
     elif t == "NEWS":
         result = await browser_tools.fetch_news()
         return result
+
+    elif t == "TASKS_LIST":
+        tasks = get_tasks_sync()
+        if tasks:
+            return "Offene Aufgaben: " + " | ".join(tasks)
+        return "Keine offenen Aufgaben in der Inbox."
 
     elif t == "REMINDER_ADD":
         title = p.replace('"', '').replace("'", "").strip()
