@@ -1,8 +1,24 @@
-# J.A.R.V.I.S. — Personal AI Voice Assistant
+# J.A.R.V.I.S. — Personal AI Voice Assistant (macOS Port)
+
+> **⚠️ This is a personal macOS adaptation of [Julian-Ivanov/jarvis-voice-assistant](https://github.com/Julian-Ivanov/jarvis-voice-assistant).**
+> No support is provided. This fork is maintained for personal use only.
+
+---
+
+## macOS Adaptations
+This fork ports the original Windows project to macOS (Apple Silicon / M4):
+- Replaced PowerShell scripts with zsh shell scripts
+- Replaced double-clap trigger with global hotkey via [skhd](https://github.com/koekeishiya/skhd) (Cmd+Shift+J)
+- Added launchd auto-start agent
+- Added browser mute button and menubar mute button
+- Adapted screen capture for macOS
+- Tested on macOS with Safari
+
+Original project by [Julian Ivanov](https://github.com/Julian-Ivanov) — built entirely with [Claude Code](https://claude.ai/code).
+
+---
 
 > Double-clap. Jarvis wakes up, greets you with the weather and your tasks, answers your questions with dry British wit, controls your browser, and sees your screen.
-
-Built entirely with [Claude Code](https://claude.ai/code) — no code written manually.
 
 ---
 
