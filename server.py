@@ -60,15 +60,12 @@ def get_weather_sync():
 
 
 def get_tasks_sync():
-    """Read open reminders from macOS Reminders Inbox."""
+    """Read open reminders from ALL Reminders lists (fast single query)."""
+    script = 'tell application "Reminders" to get name of (every reminder whose completed is false)'
     try:
-        result = subprocess.run(
-            ["osascript", "-e",
-             'tell application "Reminders" to get name of every reminder of list "Inbox" whose completed is false'],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return [i.strip() for i in result.stdout.strip().split(",") if i.strip()]
+        r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=30)
+        if r.returncode == 0 and r.stdout.strip():
+            return [i.strip() for i in r.stdout.strip().split(",") if i.strip()]
         return []
     except:
         return []
@@ -246,7 +243,7 @@ async def execute_action(action: dict) -> str:
         tasks = get_tasks_sync()
         if tasks:
             return "Offene Aufgaben: " + " | ".join(tasks)
-        return "Keine offenen Aufgaben in der Inbox."
+        return "Keine offenen Aufgaben."
 
     elif t == "REMINDER_ADD":
         title = p.replace('"', '').replace("'", "").strip()
@@ -303,7 +300,7 @@ end tell'''
     elif t == "REMINDER_DONE":
         keyword = p.replace('"', '').replace("'", "").strip()
         script = f'''tell application "Reminders"
-    repeat with r in (reminders of list "Inbox" whose completed is false)
+    repeat with r in (every reminder whose completed is false)
         if name of r contains "{keyword}" then
             set completed of r to true
         end if
