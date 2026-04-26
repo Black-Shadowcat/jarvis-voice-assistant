@@ -74,16 +74,41 @@ def get_tasks_sync():
         return []
 
 
+def get_mail_sync():
+    """Read unread mails from iCloud INBOX via Mail.app."""
+    script = '''
+tell application "Mail"
+    set acc to account "iCloud"
+    set mb to mailbox "INBOX" of acc
+    set msgList to {}
+    set unread to (messages of mb whose read status is false)
+    repeat with m in unread
+        set end of msgList to (sender of m) & " || " & (subject of m)
+    end repeat
+    return msgList
+end tell'''
+    try:
+        r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=10)
+        if r.returncode == 0 and r.stdout.strip():
+            return [i.strip() for i in r.stdout.strip().split(",") if i.strip()][:10]
+        return []
+    except:
+        return []
+
+
 def refresh_data():
-    """Refresh weather and tasks."""
-    global WEATHER_INFO, TASKS_INFO
+    """Refresh weather, tasks and mail."""
+    global WEATHER_INFO, TASKS_INFO, MAIL_INFO
     WEATHER_INFO = get_weather_sync()
     TASKS_INFO = get_tasks_sync()
+    MAIL_INFO = get_mail_sync()
     print(f"[jarvis] Wetter: {WEATHER_INFO}", flush=True)
     print(f"[jarvis] Tasks: {len(TASKS_INFO)} geladen", flush=True)
+    print(f"[jarvis] Mails: {len(MAIL_INFO)} ungelesen", flush=True)
 
 WEATHER_INFO = ""
 TASKS_INFO = []
+MAIL_INFO = []
 refresh_data()
 
 # Action parsing
@@ -101,11 +126,17 @@ def build_system_prompt():
     if TASKS_INFO:
         task_block = f"\nOffene Aufgaben ({len(TASKS_INFO)}): " + ", ".join(TASKS_INFO[:5])
 
-    return f"""Du bist Jarvis, der KI-Assistent von Tony Stark aus Iron Man. Dein Dienstherr ist Julian, ein KI-Berater und Automatisierungsexperte. Du sprichst ausschliesslich Deutsch. Julian moechte mit "Sir" angesprochen und gesiezt werden. Nutze "Sie" als Pronomen — FALSCH: "Sir planen", RICHTIG: "Sie planen, Sir". Dein Ton ist trocken, sarkastisch und britisch-hoeflich - wie ein Butler der alles gesehen hat und trotzdem loyal bleibt. Du machst subtile, trockene Bemerkungen, bist aber niemals respektlos. Wenn Sir eine offensichtliche Frage stellt, darfst du mit elegantem Sarkasmus antworten. Du bist hochintelligent, effizient und immer einen Schritt voraus. Halte deine Antworten kurz - maximal 3 Saetze. Du kommentierst fragwuerdige Entscheidungen hoeflich aber spitz.
+    mail_block = ""
+    if MAIL_INFO:
+        mail_block = f"\nUngelesene Mails ({len(MAIL_INFO)}): " + " / ".join(MAIL_INFO[:5])
+    else:
+        mail_block = "\nUngelesene Mails: keine"
+
+    return f"""Du bist Jarvis, der KI-Assistent von Tony Stark aus Iron Man. Dein Dienstherr ist {USER_NAME}. Du sprichst ausschliesslich Deutsch. {USER_NAME} moechte mit "{USER_ADDRESS}" angesprochen und gesiezt werden. Nutze "Sie" als Pronomen — FALSCH: "Sir planen", RICHTIG: "Sie planen, Sir". Dein Ton ist trocken, sarkastisch und britisch-hoeflich - wie ein Butler der alles gesehen hat und trotzdem loyal bleibt. Du machst subtile, trockene Bemerkungen, bist aber niemals respektlos. Wenn Sir eine offensichtliche Frage stellt, darfst du mit elegantem Sarkasmus antworten. Du bist hochintelligent, effizient und immer einen Schritt voraus. Halte deine Antworten kurz - maximal 3 Saetze. Du kommentierst fragwuerdige Entscheidungen hoeflich aber spitz.
 
 WICHTIG: Schreibe NIEMALS Regieanweisungen, Emotionen oder Tags in eckigen Klammern wie [sarcastic] [formal] [amused] [dry] oder aehnliches. Dein Sarkasmus muss REIN durch die Wortwahl kommen. Alles was du schreibst wird laut vorgelesen.
 
-Du hast die volle Kontrolle ueber den Browser von Julian. Du kannst im Internet suchen, Webseiten oeffnen und den Bildschirm sehen. Wenn Sir dich bittet etwas nachzuschauen, zu recherchieren, zu googeln, eine Seite zu oeffnen, oder irgendetwas im Internet zu tun — nutze IMMER eine Aktion. Frag nicht ob du es tun sollst, tu es einfach.
+Du hast die volle Kontrolle ueber den Browser von {USER_NAME}. Du kannst im Internet suchen, Webseiten oeffnen und den Bildschirm sehen. Wenn Sir dich bittet etwas nachzuschauen, zu recherchieren, zu googeln, eine Seite zu oeffnen, oder irgendetwas im Internet zu tun — nutze IMMER eine Aktion. Frag nicht ob du es tun sollst, tu es einfach.
 
 AKTIONEN - Schreibe die passende Aktion ans ENDE deiner Antwort. Der Text VOR der Aktion wird vorgelesen, die Aktion selbst wird still ausgefuehrt.
 [ACTION:SEARCH] suchbegriff - Internet durchsuchen und Ergebnisse zusammenfassen
@@ -114,14 +145,16 @@ AKTIONEN - Schreibe die passende Aktion ans ENDE deiner Antwort. Der Text VOR de
 [ACTION:NEWS] - Aktuelle Weltnachrichten abrufen. Nutze diese Aktion wenn nach News, Nachrichten, was in der Welt passiert, aktuelle Lage oder Weltgeschehen gefragt wird. Schreibe einen kurzen Satz davor wie "Ich schaue nach den aktuellen Nachrichten."
 [ACTION:REMINDER_ADD] aufgabe - Neue Erinnerung in die Inbox schreiben. Nutze diese Aktion wenn Sir etwas hinzufuegen, notieren, merken oder erinnert werden moechte.
 [ACTION:REMINDER_DONE] stichwort - Erinnerung als erledigt markieren. Nutze diese Aktion wenn Sir sagt dass etwas erledigt, abgehakt oder fertig ist.
+[ACTION:MAIL_READ] stichwort - Mails lesen. Ohne Stichwort: alle Ungelesenen auflisten. Mit Stichwort (z.B. Absendername): Inhalt der passenden Mail vorlesen.
 
-WENN Julian "Jarvis activate" sagt:
+WENN {USER_NAME} "Jarvis activate" sagt:
 - Begruesse ihn passend zur Tageszeit (aktuelle Zeit: {{time}}).
 - Gebe eine kurze Info ueber das Wetter — Temperatur und ob Sonne/klar/bewoelkt/Regen, und wie es sich anfuehlt. Keine Luftfeuchtigkeit.
 - Fasse die Aufgaben kurz als Ueberblick in einem Satz zusammen, ohne dabei jede einzelne Aufgabe einfach vorzulesen. Gebe gerne einen humorvollen Kommentar am Ende an.
+- Erwaehne kurz die Anzahl ungelesener Mails. Wenn keine: lass es weg.
 - Sei kreativ bei der Begruessung.
 
-=== AKTUELLE DATEN ==={weather_block}{task_block}
+=== AKTUELLE DATEN ==={weather_block}{task_block}{mail_block}
 ==="""
 
 
@@ -220,6 +253,45 @@ async def execute_action(action: dict) -> str:
             TASKS_INFO = get_tasks_sync()
             return f"Erinnerung hinzugefügt: {title}"
         return "Fehler beim Hinzufügen der Erinnerung"
+
+    elif t == "MAIL_READ":
+        keyword = p.strip()
+        if keyword:
+            script = f'''
+tell application "Mail"
+    set acc to account "iCloud"
+    set mb to mailbox "INBOX" of acc
+    set msgList to {{}}
+    set msgs to (messages of mb whose sender contains "{keyword}")
+    if (count of msgs) = 0 then
+        set msgs to (messages of mb whose subject contains "{keyword}")
+    end if
+    repeat with m in msgs
+        set msgBody to content of m
+        if length of msgBody > 800 then set msgBody to text 1 thru 800 of msgBody
+        set end of msgList to "Von: " & sender of m & return & "Betreff: " & subject of m & return & msgBody
+    end repeat
+    return msgList
+end tell'''
+        else:
+            script = '''
+tell application "Mail"
+    set acc to account "iCloud"
+    set mb to mailbox "INBOX" of acc
+    set msgList to {}
+    set unread to (messages of mb whose read status is false)
+    repeat with m in unread
+        set end of msgList to "Von: " & sender of m & " | Betreff: " & subject of m
+    end repeat
+    return msgList
+end tell'''
+        try:
+            r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=15)
+            if r.returncode == 0 and r.stdout.strip():
+                return r.stdout.strip()
+            return "Keine passenden Mails gefunden."
+        except Exception as e:
+            return f"Fehler beim Lesen der Mails: {e}"
 
     elif t == "REMINDER_DONE":
         keyword = p.replace('"', '').replace("'", "").strip()
