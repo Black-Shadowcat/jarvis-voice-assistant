@@ -250,7 +250,7 @@ async def execute_action(action: dict) -> str:
         result = subprocess.run(
             ["osascript", "-e",
              f'tell application "Reminders" to make new reminder at list "Inbox" with properties {{name:"{title}"}}'],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=30
         )
         if result.returncode == 0:
             global TASKS_INFO
@@ -306,7 +306,7 @@ end tell'''
         end if
     end repeat
 end tell'''
-        result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=30)
         if result.returncode == 0:
             TASKS_INFO = get_tasks_sync()
             return f"Erinnerung abgehakt: {keyword}"
