@@ -73,7 +73,7 @@ echo "  → Browser opened"
 echo "[3/5] Opening apps..."
 if [[ -n "$APPS" ]]; then
     # Split comma-separated apps
-    IFS=',' read -ra APP_ARRAY <<< "$APPS"
+    APP_ARRAY=(${(s:,:)APPS})
     for app in "${APP_ARRAY[@]}"; do
         echo "  → Opening: $app"
         open -a "$app" 2>/dev/null || open "/System/Applications/${app}.app" 2>/dev/null
