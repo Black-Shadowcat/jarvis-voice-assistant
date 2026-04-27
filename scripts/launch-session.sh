@@ -2,6 +2,9 @@
 # JARVIS — Launch Session (macOS)
 # Starts FastAPI server, browser, and configured apps
 
+# Give the desktop time to fully initialize when launched at login
+sleep 8
+
 # Get the directory where this script is located
 SCRIPT_DIR="${0:A:h}"
 WORKSPACE_PATH="$(dirname "$SCRIPT_DIR")"
@@ -57,9 +60,9 @@ else
     done
 fi
 
-# 2. Open browser
+# 2. Open browser (URL will be loaded by AppleScript below to ensure correct tab)
 echo "[2/4] Opening browser..."
-open "$SERVER_URL"
+open -a "Safari"
 if [[ -n "$BROWSER_URL" ]]; then
     sleep 2
     open "$BROWSER_URL"
@@ -88,11 +91,21 @@ fi
 echo "[4/5] Arranging windows..."
 sleep 4
 osascript << 'APPLESCRIPT'
+-- Wait for Safari to have at least one window
 tell application "Safari"
     activate
     delay 0.5
-    open location "http://localhost:8340"
-    delay 0.5
+    set retries to 0
+    repeat while (count of windows) = 0 and retries < 10
+        delay 0.5
+        set retries to retries + 1
+    end repeat
+    if (count of windows) = 0 then
+        make new document
+        delay 0.5
+    end if
+    set URL of front document to "http://localhost:8340"
+    delay 1.5
 end tell
 tell application "System Events" to tell process "Safari"
     set size of front window to {959, 579}

@@ -13,7 +13,7 @@ def capture_screen() -> bytes:
     try:
         # Use macOS screenshot command
         result = subprocess.run(
-            ["screencapture", "-x", "-t", "png", "/tmp/jarvis_capture.png"],
+            ["/usr/sbin/screencapture", "-x", "-t", "png", "/tmp/jarvis_capture.png"],
             capture_output=True,
             check=True
         )

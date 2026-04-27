@@ -30,6 +30,26 @@ USER_NAME = config.get("user_name", "Julian")
 USER_ADDRESS = config.get("user_address", "Sir")
 CITY = config.get("city", "Hamburg")
 TASKS_FILE = config.get("obsidian_inbox_path", "")
+HA_URL = config.get("ha_url", "").rstrip("/")
+HA_TOKEN = config.get("ha_token", "")
+
+LIGHT_MAP: dict[str, str | list[str]] = {
+    "alle":          "light.alle_lichter",
+    "alles":         "light.alle_lichter",
+    "wohnzimmer":    "light.wohnzimmer",
+    "küche":         "light.kuche",
+    "kuche":         "light.kuche",
+    "büro":          "light.buro",
+    "buro":          "light.buro",
+    "arbeitszimmer": "light.buro",
+    "flur":          "light.flur",
+    "schlafzimmer":  "light.schlafzimmer",
+    "balkon":        "light.balkon_led",
+    "iris":          "light.hue_iris",
+    "hue go":        "light.hue_go_1",
+    "sideboard":     ["light.sideboard_links", "light.sideboard_rechts"],
+    "nachtschrank":  ["light.nachtschrank_links", "light.nachtschrank_rechts"],
+}
 
 ai = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 http = httpx.AsyncClient(timeout=30)
@@ -60,8 +80,23 @@ def get_weather_sync():
 
 
 def get_tasks_sync():
-    """Read open reminders from ALL Reminders lists (fast single query)."""
-    script = 'tell application "Reminders" to get name of (every reminder whose completed is false)'
+    """Read open reminders due today, tomorrow or overdue (no due date included)."""
+    script = '''
+tell application "Reminders"
+    set cutoff to current date
+    set hours of cutoff to 23
+    set minutes of cutoff to 59
+    set seconds of cutoff to 59
+    set cutoff to cutoff + (1 * days)
+    set result to {}
+    repeat with r in (every reminder whose completed is false)
+        set dd to due date of r
+        if dd is missing value or dd ≤ cutoff then
+            set end of result to name of r
+        end if
+    end repeat
+    return result
+end tell'''
     try:
         r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=30)
         if r.returncode == 0 and r.stdout.strip():
@@ -144,6 +179,7 @@ AKTIONEN - Schreibe die passende Aktion ans ENDE deiner Antwort. Der Text VOR de
 [ACTION:REMINDER_DONE] stichwort - Erinnerung als erledigt markieren. Nutze diese Aktion wenn Sir sagt dass etwas erledigt, abgehakt oder fertig ist.
 [ACTION:TASKS_LIST] - Aktuelle Aufgabenliste live aus Reminders laden und vorlesen. Nutze diese Aktion IMMER wenn Sir fragt welche Aufgaben es gibt, was auf der Liste steht, oder was noch offen ist.
 [ACTION:MAIL_READ] stichwort - Mails lesen. Ohne Stichwort: alle Ungelesenen auflisten. Mit Stichwort (z.B. Absendername): Inhalt der passenden Mail vorlesen.
+[ACTION:LICHT] raum befehl - Licht per Home Assistant steuern. Raeume: alle, wohnzimmer, kueche, buero, flur, schlafzimmer, balkon, nachtschrank, sideboard, iris. Befehle: "an", "aus", oder Prozentzahl fuer Helligkeit (z.B. "50"). Beispiele: "wohnzimmer an", "alles aus", "buero 50". Nutze diese Aktion IMMER wenn Sir Licht ein- oder ausschalten oder dimmen moechte.
 
 WENN {USER_NAME} "Jarvis activate" sagt:
 - Begruesse ihn passend zur Tageszeit (aktuelle Zeit: {{time}}).
@@ -311,6 +347,58 @@ end tell'''
             TASKS_INFO = get_tasks_sync()
             return f"Erinnerung abgehakt: {keyword}"
         return "Fehler beim Abhaken der Erinnerung"
+
+    elif t == "LICHT":
+        if not HA_URL or not HA_TOKEN:
+            return "Home Assistant nicht konfiguriert."
+        words = p.strip().lower().split()
+        if not words:
+            return "Kein Lichtbefehl angegeben."
+
+        cmd = "turn_on"
+        brightness: int | None = None
+        room_words: list[str] = []
+
+        for i, word in enumerate(words):
+            w = word.rstrip("%")
+            if word in ("an", "ein", "einschalten"):
+                cmd = "turn_on"
+                room_words = [x for x in words[:i] if x not in ("das", "die", "den", "licht")]
+                break
+            elif word in ("aus", "ausschalten"):
+                cmd = "turn_off"
+                room_words = [x for x in words[:i] if x not in ("das", "die", "den", "licht")]
+                break
+            elif w.isdigit():
+                brightness = int(w)
+                cmd = "turn_on"
+                room_words = [x for x in words[:i] if x not in ("das", "die", "den", "licht", "auf")]
+                break
+        else:
+            room_words = [x for x in words if x not in ("das", "die", "den", "licht")]
+
+        room = " ".join(room_words) if room_words else "alle"
+        # normalize umlauts for lookup
+        room_norm = room.replace("ü", "u").replace("ö", "o").replace("ä", "a")
+        entity = LIGHT_MAP.get(room) or LIGHT_MAP.get(room_norm) or LIGHT_MAP["alle"]
+        entities = entity if isinstance(entity, list) else [entity]
+
+        headers = {"Authorization": f"Bearer {HA_TOKEN}", "Content-Type": "application/json"}
+        for eid in entities:
+            payload: dict = {"entity_id": eid}
+            if brightness is not None:
+                payload["brightness_pct"] = brightness
+            try:
+                await http.post(f"{HA_URL}/api/services/light/{cmd}", headers=headers, json=payload)
+            except Exception as e:
+                return f"Home Assistant Fehler: {e}"
+
+        room_label = room.capitalize() if room != "alle" else "Alle Lichter"
+        if cmd == "turn_off":
+            return f"{room_label} ausgeschaltet."
+        elif brightness is not None:
+            return f"{room_label} auf {brightness}% gedimmt."
+        return f"{room_label} eingeschaltet."
 
     return ""
 
