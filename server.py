@@ -106,6 +106,37 @@ end tell'''
         return []
 
 
+def get_calendar_sync(days: int = 7) -> list[str]:
+    """Read upcoming calendar events from Calendar.app."""
+    skip = "ALW_Abfallkalender_2018-12-01_2019-11-30", "Siri-Vorschläge", "Geplante Erinnerungen"
+    skip_as = "{" + ", ".join(f'"{s}"' for s in skip) + "}"
+    script = f'''
+tell application "Calendar"
+    set today to current date
+    set endDate to today + ({days} * days)
+    set output to ""
+    repeat with c in every calendar
+        if name of c is not in {skip_as} then
+            try
+                set evts to (every event of c whose start date >= today and start date <= endDate)
+                repeat with e in evts
+                    set output to output & (summary of e) & " [" & (name of c) & "] -- " & ((start date of e) as string) & "\\n"
+                end repeat
+            end try
+        end if
+    end repeat
+    if output is "" then return "Keine Termine"
+    return output
+end tell'''
+    try:
+        r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=30)
+        if r.returncode == 0 and r.stdout.strip() and r.stdout.strip() != "Keine Termine":
+            return [l.strip() for l in r.stdout.strip().split("\n") if l.strip()]
+        return []
+    except Exception:
+        return []
+
+
 def get_mail_sync():
     """Read unread mails from iCloud INBOX via Mail.app."""
     script = '''
@@ -129,18 +160,21 @@ end tell'''
 
 
 def refresh_data():
-    """Refresh weather, tasks and mail."""
-    global WEATHER_INFO, TASKS_INFO, MAIL_INFO
+    """Refresh weather, tasks, mail and calendar."""
+    global WEATHER_INFO, TASKS_INFO, MAIL_INFO, CALENDAR_INFO
     WEATHER_INFO = get_weather_sync()
     TASKS_INFO = get_tasks_sync()
     MAIL_INFO = get_mail_sync()
+    CALENDAR_INFO = get_calendar_sync(days=7)
     print(f"[jarvis] Wetter: {WEATHER_INFO}", flush=True)
     print(f"[jarvis] Tasks: {len(TASKS_INFO)} geladen", flush=True)
     print(f"[jarvis] Mails: {len(MAIL_INFO)} ungelesen", flush=True)
+    print(f"[jarvis] Kalender: {len(CALENDAR_INFO)} Termine (7 Tage)", flush=True)
 
 WEATHER_INFO = ""
 TASKS_INFO = []
 MAIL_INFO = []
+CALENDAR_INFO = []
 refresh_data()
 
 # Action parsing
@@ -164,6 +198,12 @@ def build_system_prompt():
     else:
         mail_block = "\nUngelesene Mails: keine"
 
+    cal_block = ""
+    if CALENDAR_INFO:
+        cal_block = f"\nTermine naechste 7 Tage ({len(CALENDAR_INFO)}): " + " | ".join(CALENDAR_INFO[:8])
+    else:
+        cal_block = "\nTermine naechste 7 Tage: keine"
+
     return f"""Du bist Jarvis, der KI-Assistent von Tony Stark aus Iron Man. Dein Dienstherr ist {USER_NAME}. Er wohnt in {CITY}. Du sprichst ausschliesslich Deutsch. {USER_NAME} moechte mit "{USER_ADDRESS}" angesprochen und gesiezt werden. Nutze "Sie" als Pronomen — FALSCH: "Sir planen", RICHTIG: "Sie planen, Sir". Dein Ton ist trocken, sarkastisch und britisch-hoeflich - wie ein Butler der alles gesehen hat und trotzdem loyal bleibt. Du machst subtile, trockene Bemerkungen, bist aber niemals respektlos. Wenn Sir eine offensichtliche Frage stellt, darfst du mit elegantem Sarkasmus antworten. Du bist hochintelligent, effizient und immer einen Schritt voraus. Halte deine Antworten kurz - maximal 3 Saetze. Du kommentierst fragwuerdige Entscheidungen hoeflich aber spitz.
 
 WICHTIG: Schreibe NIEMALS Regieanweisungen, Emotionen oder Tags in eckigen Klammern wie [sarcastic] [formal] [amused] [dry] oder aehnliches. Dein Sarkasmus muss REIN durch die Wortwahl kommen. Alles was du schreibst wird laut vorgelesen.
@@ -179,6 +219,7 @@ AKTIONEN - Schreibe die passende Aktion ans ENDE deiner Antwort. Der Text VOR de
 [ACTION:REMINDER_DONE] stichwort - Erinnerung als erledigt markieren. Nutze diese Aktion wenn Sir sagt dass etwas erledigt, abgehakt oder fertig ist.
 [ACTION:TASKS_LIST] - Aktuelle Aufgabenliste live aus Reminders laden und vorlesen. Nutze diese Aktion IMMER wenn Sir fragt welche Aufgaben es gibt, was auf der Liste steht, oder was noch offen ist.
 [ACTION:MAIL_READ] stichwort - Mails lesen. Ohne Stichwort: alle Ungelesenen auflisten. Mit Stichwort (z.B. Absendername): Inhalt der passenden Mail vorlesen.
+[ACTION:KALENDER] zeitraum - Kalendertermine live abrufen. Zeitraum: "heute", "morgen", "woche" (Standard: 7 Tage). Nutze diese Aktion IMMER wenn Sir nach Terminen, dem Kalender, was ansteht oder was heute/morgen/diese Woche los ist fragt.
 [ACTION:LICHT] raum befehl - Licht per Home Assistant steuern. Raeume: alle, wohnzimmer, kueche, buero, flur, schlafzimmer, balkon, nachtschrank, sideboard, iris. Befehle: "an", "aus", oder Prozentzahl fuer Helligkeit (z.B. "50"). Beispiele: "wohnzimmer an", "alles aus", "buero 50". Nutze diese Aktion IMMER wenn Sir Licht ein- oder ausschalten oder dimmen moechte.
 
 WENN {USER_NAME} "Jarvis activate" sagt:
@@ -186,9 +227,10 @@ WENN {USER_NAME} "Jarvis activate" sagt:
 - Gebe eine kurze Info ueber das Wetter — Temperatur und ob Sonne/klar/bewoelkt/Regen, und wie es sich anfuehlt. Keine Luftfeuchtigkeit.
 - Fasse die Aufgaben kurz als Ueberblick in einem Satz zusammen, ohne dabei jede einzelne Aufgabe einfach vorzulesen. Gebe gerne einen humorvollen Kommentar am Ende an.
 - Erwaehne kurz die Anzahl ungelesener Mails. Wenn keine: lass es weg.
+- Erwaehne kurz anstehende Termine heute oder morgen, falls vorhanden.
 - Sei kreativ bei der Begruessung.
 
-=== AKTUELLE DATEN ==={weather_block}{task_block}{mail_block}
+=== AKTUELLE DATEN ==={weather_block}{task_block}{mail_block}{cal_block}
 ==="""
 
 
@@ -332,6 +374,19 @@ end tell'''
             return "Keine passenden Mails gefunden."
         except Exception as e:
             return f"Fehler beim Lesen der Mails: {e}"
+
+    elif t == "KALENDER":
+        zeitraum = p.strip().lower()
+        if zeitraum == "heute":
+            days = 1
+        elif zeitraum == "morgen":
+            days = 2
+        else:
+            days = 7
+        events = get_calendar_sync(days=days)
+        if not events:
+            return "Keine Termine im angegebenen Zeitraum."
+        return "\n".join(events)
 
     elif t == "REMINDER_DONE":
         keyword = p.replace('"', '').replace("'", "").strip()
