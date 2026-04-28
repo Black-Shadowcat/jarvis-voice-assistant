@@ -174,9 +174,17 @@ _DE_MONTHS = {
     "juli": 7, "august": 8, "september": 9, "oktober": 10, "november": 11, "dezember": 12,
 }
 
+_DE_WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+
+
 def _parse_de_date(s: str) -> str:
-    """Convert German AppleScript date ('Mittwoch, 29. April 2026 um 10:00:00') to ISO 'YYYY-MM-DD HH:MM'."""
+    """Convert German AppleScript date to a human-readable relative label.
+
+    E.g. 'Mittwoch, 29. April 2026 um 06:45:00' → 'morgen (Mittwoch) 06:45 Uhr'
+    Claude must not compute weekdays itself — we do it here.
+    """
     import re
+    from datetime import date, datetime
     m = re.search(r"(\d{1,2})\.\s+(\w+)\s+(\d{4})\s+um\s+(\d{2}):(\d{2})", s)
     if not m:
         return s
@@ -184,7 +192,21 @@ def _parse_de_date(s: str) -> str:
     month = _DE_MONTHS.get(month_name.lower(), 0)
     if not month:
         return s
-    return f"{year}-{month:02d}-{int(day):02d} {hour}:{minute}"
+    try:
+        dt = datetime(int(year), month, int(day), int(hour), int(minute))
+        delta = (dt.date() - date.today()).days
+        weekday = _DE_WEEKDAYS[dt.weekday()]
+        time_str = f" {hour}:{minute} Uhr" if not (hour == "00" and minute == "00") else ""
+        if delta == 0:
+            return f"heute{time_str} ({weekday})"
+        elif delta == 1:
+            return f"morgen{time_str} ({weekday})"
+        elif delta == 2:
+            return f"uebermorgen{time_str} ({weekday})"
+        else:
+            return f"{weekday}, {int(day):02d}.{month:02d}.{time_str} (in {delta} Tagen)"
+    except Exception:
+        return s
 
 
 def get_calendar_sync(days: int = 7) -> list[str]:
