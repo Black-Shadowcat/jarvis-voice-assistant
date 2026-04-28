@@ -89,8 +89,25 @@ SYMBOL_DE: dict[str, str] = {
 }
 
 
+def get_ha_temperature() -> float | None:
+    """Fetch outdoor temperature from Home Assistant weather station."""
+    if not HA_URL or not HA_TOKEN:
+        return None
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            f"{HA_URL}/api/states/sensor.weather_station_outdoor_module_temperatur",
+            headers={"Authorization": f"Bearer {HA_TOKEN}"}
+        )
+        resp = urllib.request.urlopen(req, timeout=5)
+        state = json.loads(resp.read())["state"]
+        return round(float(state), 1)
+    except Exception:
+        return None
+
+
 def get_weather_sync():
-    """Fetch current weather from Kachelmann API."""
+    """Fetch weather: temperature from HA station, conditions from Kachelmann."""
     if not KACHELMANN_KEY:
         return None
     try:
@@ -109,9 +126,11 @@ def get_weather_sync():
             desc = "Sonnig"
         elif sun is not None and sun >= 0.3:
             desc = "Teilweise bewoelkt"
+        # Use own weather station for temperature (more accurate)
+        ha_temp = get_ha_temperature()
+        temp = ha_temp if ha_temp is not None else round(v("temp") or 0, 1)
         return {
-            "temp": round(v("temp") or 0, 1),
-            "feels_like": round(v("temp") or 0, 1),
+            "temp": temp,
             "description": desc,
             "humidity": v("humidityRelative"),
             "wind_kmh": v("windSpeed"),
