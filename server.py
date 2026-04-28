@@ -29,6 +29,9 @@ ELEVENLABS_VOICE_ID = config.get("elevenlabs_voice_id", "rDmv3mOhK6TnhYWckFaD")
 USER_NAME = config.get("user_name", "Julian")
 USER_ADDRESS = config.get("user_address", "Sir")
 CITY = config.get("city", "Hamburg")
+LAT = config.get("lat", 53.55)
+LON = config.get("lon", 10.00)
+KACHELMANN_KEY = config.get("kachelmann_api_key", "")
 TASKS_FILE = config.get("obsidian_inbox_path", "")
 HA_URL = config.get("ha_url", "").rstrip("/")
 HA_TOKEN = config.get("ha_token", "")
@@ -60,22 +63,63 @@ import browser_tools
 import screen_capture
 
 
+SYMBOL_DE: dict[str, str] = {
+    "sunny": "Sonnig",
+    "clearsky": "Klarer Himmel",
+    "clear": "Klar",
+    "partlycloudy": "Teilweise bewoelkt",
+    "cloudy": "Bewoelkt",
+    "overcast": "Bedeckt",
+    "fog": "Neblig",
+    "rain": "Regen",
+    "rainy": "Regen",
+    "lightrain": "Leichter Regen",
+    "heavyrain": "Starker Regen",
+    "drizzle": "Nieselregen",
+    "sleet": "Schneeregen",
+    "snow": "Schnee",
+    "snowy": "Schnee",
+    "hail": "Hagel",
+    "thunder": "Gewitter",
+    "thunderstorm": "Gewitter",
+    "windy": "Windig",
+    "clearnight": "Klare Nacht",
+    "cloudynight": "Bewoelkte Nacht",
+    "rainynight": "Regen in der Nacht",
+}
+
+
 def get_weather_sync():
-    """Fetch raw weather data at startup."""
-    import urllib.request
+    """Fetch current weather from Kachelmann API."""
+    if not KACHELMANN_KEY:
+        return None
     try:
-        req = urllib.request.Request(f"https://wttr.in/{CITY}?format=j1", headers={"User-Agent": "curl"})
-        resp = urllib.request.urlopen(req, timeout=5)
-        data = json.loads(resp.read())
-        c = data["current_condition"][0]
+        import urllib.request
+        req = urllib.request.Request(
+            f"https://api.kachelmannwetter.com/v02/current/{LAT}/{LON}",
+            headers={"X-API-Key": KACHELMANN_KEY}
+        )
+        resp = urllib.request.urlopen(req, timeout=10)
+        data = json.loads(resp.read())["data"]
+        def v(k): return data[k]["value"] if k in data else None
+        symbol = v("weatherSymbol") or ""
+        desc = SYMBOL_DE.get(symbol.lower(), symbol)
+        sun = v("sunHours")
+        if sun is not None and sun >= 0.8:
+            desc = "Sonnig"
+        elif sun is not None and sun >= 0.3:
+            desc = "Teilweise bewoelkt"
         return {
-            "temp": c["temp_C"],
-            "feels_like": c["FeelsLikeC"],
-            "description": c["weatherDesc"][0]["value"],
-            "humidity": c["humidity"],
-            "wind_kmh": c["windspeedKmph"],
+            "temp": round(v("temp") or 0, 1),
+            "feels_like": round(v("temp") or 0, 1),
+            "description": desc,
+            "humidity": v("humidityRelative"),
+            "wind_kmh": v("windSpeed"),
+            "cloud_pct": v("cloudCoverage"),
+            "sun_hours": sun,
         }
-    except:
+    except Exception as e:
+        print(f"[jarvis] Wetter-Fehler: {e}", flush=True)
         return None
 
 
@@ -186,7 +230,8 @@ def build_system_prompt():
     weather_block = ""
     if WEATHER_INFO:
         w = WEATHER_INFO
-        weather_block = f"\nWetter {CITY}: {w['temp']}°C, gefuehlt {w['feels_like']}°C, {w['description']}"
+        wind = f", Wind {w['wind_kmh']} km/h" if w.get('wind_kmh') else ""
+        weather_block = f"\nWetter {CITY}: {w['temp']}°C, {w['description']}{wind}"
 
     task_block = ""
     if TASKS_INFO:
@@ -566,6 +611,24 @@ app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__
 @app.get("/")
 async def serve_index():
     return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "index.html"))
+
+
+async def periodic_refresh():
+    """Refresh weather, tasks, mail and calendar every 30 minutes."""
+    while True:
+        await asyncio.sleep(30 * 60)
+        print("[jarvis] Periodic refresh...", flush=True)
+        refresh_data()
+
+
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app):
+    asyncio.create_task(periodic_refresh())
+    yield
+
+app.router.lifespan_context = lifespan
 
 
 if __name__ == "__main__":
