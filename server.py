@@ -209,23 +209,63 @@ def _parse_de_date(s: str) -> str:
         return s
 
 
+def _label_from_dt(dt) -> str:
+    """Convert a datetime to a human-readable relative label for Claude."""
+    from datetime import date
+    delta = (dt.date() - date.today()).days
+    weekday = _DE_WEEKDAYS[dt.weekday()]
+    time_str = f" {dt.strftime('%H:%M')} Uhr" if not (dt.hour == 0 and dt.minute == 0) else ""
+    if delta == 0:
+        return f"heute{time_str} ({weekday})"
+    elif delta == 1:
+        return f"morgen{time_str} ({weekday})"
+    elif delta == 2:
+        return f"uebermorgen{time_str} ({weekday})"
+    else:
+        return f"{weekday}, {dt.strftime('%d.%m.')}{time_str} (in {delta} Tagen)"
+
+
+def _de_date_to_datetime(s: str):
+    """Parse German AppleScript date string to datetime. Returns None if unparseable."""
+    import re
+    from datetime import datetime
+    m = re.search(r"(\d{1,2})\.\s+(\w+)\s+(\d{4})\s+um\s+(\d{2}):(\d{2})", s)
+    if not m:
+        return None
+    day, month_name, year, hour, minute = m.groups()
+    month = _DE_MONTHS.get(month_name.lower(), 0)
+    if not month:
+        return None
+    try:
+        return datetime(int(year), month, int(day), int(hour), int(minute))
+    except Exception:
+        return None
+
+
 def get_calendar_sync(days: int = 7) -> list[str]:
-    """Read upcoming calendar events from Calendar.app."""
+    """Read upcoming calendar events, resolving recurring event occurrences via RRULE."""
+    from datetime import datetime, date, timedelta
+    from dateutil.rrule import rrulestr
+
     skip = "ALW_Abfallkalender_2018-12-01_2019-11-30", "Siri-Vorschläge", "Geplante Erinnerungen"
     skip_as = "{" + ", ".join(f'"{s}"' for s in skip) + "}"
-    # Use (start date of e) as string WITHOUT variable assignment — this returns the
-    # correct occurrence date for recurring events (variable assignment returns series start)
+
+    # Calendar's date filter matches occurrences, not series start — a narrow window is sufficient.
+    # AppleScript returns the series root's start date; Python computes actual occurrences via RRULE.
     script = f'''
 tell application "Calendar"
-    set startDate to current date
-    set endDate to startDate + ({days} * days)
     set output to ""
+    set lookback to current date - (2 * days)
+    set lookahead to current date + ({days} * days)
     repeat with c in every calendar
         if name of c is not in {skip_as} then
             try
-                set evts to (every event of c whose start date >= startDate and start date <= endDate)
+                set evts to (every event of c whose start date >= lookback and start date <= lookahead)
                 repeat with e in evts
-                    set output to output & (summary of e) & " [" & (name of c) & "] -- " & ((start date of e) as string) & "\\n"
+                    set recur to recurrence of e
+                    set rStr to ""
+                    if recur is not missing value then set rStr to recur
+                    set output to output & (summary of e) & "|||" & (name of c) & "|||" & ((start date of e) as string) & "|||" & rStr & "\\n"
                 end repeat
             end try
         end if
@@ -234,20 +274,50 @@ tell application "Calendar"
     return output
 end tell'''
     try:
-        r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=30)
-        if r.returncode == 0 and r.stdout.strip() and r.stdout.strip() != "Keine Termine":
-            lines = []
-            for line in r.stdout.strip().split("\n"):
-                line = line.strip()
-                if not line:
+        r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=60)
+        if not (r.returncode == 0 and r.stdout.strip() and r.stdout.strip() != "Keine Termine"):
+            return []
+
+        now = datetime.now()
+        window_end = now + timedelta(days=days)
+        seen: set[str] = set()
+        results: list[tuple[datetime, str]] = []
+
+        for line in r.stdout.strip().split("\n"):
+            parts = line.strip().split("|||")
+            if len(parts) < 3:
+                continue
+            title, cal, date_str = parts[0], parts[1], parts[2]
+            rrule_str = parts[3].strip() if len(parts) > 3 else ""
+
+            series_start = _de_date_to_datetime(date_str)
+            if series_start is None:
+                continue
+
+            occurrences: list[datetime] = []
+            if rrule_str:
+                try:
+                    rule = rrulestr(rrule_str, dtstart=series_start, ignoretz=True)
+                    occurrences = list(rule.between(now, window_end, inc=True))
+                except Exception:
+                    if now <= series_start <= window_end:
+                        occurrences = [series_start]
+            else:
+                if now <= series_start <= window_end:
+                    occurrences = [series_start]
+
+            for occ in occurrences:
+                key = f"{title}|{occ.strftime('%Y-%m-%d %H:%M')}"
+                if key in seen:
                     continue
-                if " -- " in line:
-                    title_part, date_part = line.rsplit(" -- ", 1)
-                    lines.append(f"{title_part} -- {_parse_de_date(date_part)}")
-                else:
-                    lines.append(line)
-            return lines
-        return []
+                seen.add(key)
+                results.append((occ, title, cal))
+
+        results.sort(key=lambda x: x[0])
+        lines = []
+        for occ, title, cal in results:
+            lines.append(f"{title} [{cal}] -- {_label_from_dt(occ)}")
+        return lines
     except Exception:
         return []
 
