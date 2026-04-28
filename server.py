@@ -169,19 +169,39 @@ end tell'''
         return []
 
 
+_DE_MONTHS = {
+    "januar": 1, "februar": 2, "märz": 3, "april": 4, "mai": 5, "juni": 6,
+    "juli": 7, "august": 8, "september": 9, "oktober": 10, "november": 11, "dezember": 12,
+}
+
+def _parse_de_date(s: str) -> str:
+    """Convert German AppleScript date ('Mittwoch, 29. April 2026 um 10:00:00') to ISO 'YYYY-MM-DD HH:MM'."""
+    import re
+    m = re.search(r"(\d{1,2})\.\s+(\w+)\s+(\d{4})\s+um\s+(\d{2}):(\d{2})", s)
+    if not m:
+        return s
+    day, month_name, year, hour, minute = m.groups()
+    month = _DE_MONTHS.get(month_name.lower(), 0)
+    if not month:
+        return s
+    return f"{year}-{month:02d}-{int(day):02d} {hour}:{minute}"
+
+
 def get_calendar_sync(days: int = 7) -> list[str]:
     """Read upcoming calendar events from Calendar.app."""
     skip = "ALW_Abfallkalender_2018-12-01_2019-11-30", "Siri-Vorschläge", "Geplante Erinnerungen"
     skip_as = "{" + ", ".join(f'"{s}"' for s in skip) + "}"
+    # Use (start date of e) as string WITHOUT variable assignment — this returns the
+    # correct occurrence date for recurring events (variable assignment returns series start)
     script = f'''
 tell application "Calendar"
-    set today to current date
-    set endDate to today + ({days} * days)
+    set startDate to current date
+    set endDate to startDate + ({days} * days)
     set output to ""
     repeat with c in every calendar
         if name of c is not in {skip_as} then
             try
-                set evts to (every event of c whose start date >= today and start date <= endDate)
+                set evts to (every event of c whose start date >= startDate and start date <= endDate)
                 repeat with e in evts
                     set output to output & (summary of e) & " [" & (name of c) & "] -- " & ((start date of e) as string) & "\\n"
                 end repeat
@@ -194,7 +214,17 @@ end tell'''
     try:
         r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=30)
         if r.returncode == 0 and r.stdout.strip() and r.stdout.strip() != "Keine Termine":
-            return [l.strip() for l in r.stdout.strip().split("\n") if l.strip()]
+            lines = []
+            for line in r.stdout.strip().split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                if " -- " in line:
+                    title_part, date_part = line.rsplit(" -- ", 1)
+                    lines.append(f"{title_part} -- {_parse_de_date(date_part)}")
+                else:
+                    lines.append(line)
+            return lines
         return []
     except Exception:
         return []
