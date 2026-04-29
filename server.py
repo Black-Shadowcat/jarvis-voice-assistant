@@ -314,8 +314,15 @@ end tell'''
                 results.append((occ, title, cal))
 
         results.sort(key=lambda x: x[0])
+        # For recurring events with the same title, show only the next occurrence.
+        # Multiple "Tagschicht" entries clutter the summary — next one is enough.
+        seen_titles: set[str] = set()
         lines = []
         for occ, title, cal in results:
+            title_key = f"{title}|{cal}"
+            if title_key in seen_titles:
+                continue
+            seen_titles.add(title_key)
             lines.append(f"{title} [{cal}] -- {_label_from_dt(occ)}")
         return lines
     except Exception:
