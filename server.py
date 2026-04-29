@@ -250,22 +250,35 @@ def get_calendar_sync(days: int = 7) -> list[str]:
     skip = "ALW_Abfallkalender_2018-12-01_2019-11-30", "Siri-Vorschläge", "Geplante Erinnerungen"
     skip_as = "{" + ", ".join(f'"{s}"' for s in skip) + "}"
 
-    # Calendar's date filter matches occurrences, not series start — a narrow window is sufficient.
-    # AppleScript returns the series root's start date; Python computes actual occurrences via RRULE.
+    # Use named calendar references (calendar "Name") instead of iterated references
+    # (repeat with c in every calendar) — the latter causes compound whose-filters to fail
+    # with error -1728 on large iCloud calendars. 1100-day lookback catches monthly recurring
+    # events created years ago (e.g. FREQ=MONTHLY series from 2023/2024).
     script = f'''
 tell application "Calendar"
     set output to ""
-    set lookback to current date - (2 * days)
+    set lookback to current date - (1100 * days)
     set lookahead to current date + ({days} * days)
+    -- Collect unique calendar names first, then query each by name for reliable filter behaviour
+    set calNames to {{}}
+    set seenNames to {{}}
     repeat with c in every calendar
-        if name of c is not in {skip_as} then
+        set n to name of c as string
+        if n is not in seenNames then
+            set end of calNames to n
+            set end of seenNames to n
+        end if
+    end repeat
+    repeat with cName in calNames
+        if cName is not in {skip_as} then
             try
-                set evts to (every event of c whose start date >= lookback and start date <= lookahead)
+                set cal to calendar cName
+                set evts to (every event of cal whose start date >= lookback and start date <= lookahead)
                 repeat with e in evts
                     set recur to recurrence of e
                     set rStr to ""
                     if recur is not missing value then set rStr to recur
-                    set output to output & (summary of e) & "|||" & (name of c) & "|||" & ((start date of e) as string) & "|||" & rStr & "\\n"
+                    set output to output & (summary of e) & "|||" & cName & "|||" & ((start date of e) as string) & "|||" & rStr & "\\n"
                 end repeat
             end try
         end if
@@ -274,7 +287,7 @@ tell application "Calendar"
     return output
 end tell'''
     try:
-        r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=60)
+        r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=90)
         if not (r.returncode == 0 and r.stdout.strip() and r.stdout.strip() != "Keine Termine"):
             return []
 
