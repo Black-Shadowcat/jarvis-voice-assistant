@@ -336,7 +336,7 @@ end tell'''
             if title_key in seen_titles:
                 continue
             seen_titles.add(title_key)
-            lines.append(f"{title} [{cal}] -- {_label_from_dt(occ)}")
+            lines.append(f"{title} -- {_label_from_dt(occ)}")
         return lines
     except Exception:
         return []
@@ -425,7 +425,7 @@ AKTIONEN - Schreibe die passende Aktion ans ENDE deiner Antwort. Der Text VOR de
 [ACTION:REMINDER_DONE] stichwort - Erinnerung als erledigt markieren. Nutze diese Aktion wenn Sir sagt dass etwas erledigt, abgehakt oder fertig ist.
 [ACTION:TASKS_LIST] - Aktuelle Aufgabenliste live aus Reminders laden und vorlesen. Nutze diese Aktion IMMER wenn Sir fragt welche Aufgaben es gibt, was auf der Liste steht, oder was noch offen ist.
 [ACTION:MAIL_READ] stichwort - Mails lesen. Ohne Stichwort: alle Ungelesenen auflisten. Mit Stichwort (z.B. Absendername): Inhalt der passenden Mail vorlesen.
-[ACTION:KALENDER] zeitraum - Kalendertermine live abrufen. Zeitraum: "heute", "morgen", "woche" (Standard: 7 Tage). Nutze diese Aktion IMMER wenn Sir nach Terminen, dem Kalender, was ansteht oder was heute/morgen/diese Woche los ist fragt.
+[ACTION:KALENDER] zeitraum - Kalendertermine live abrufen. Zeitraum: "heute" (1 Tag), "morgen" (2 Tage), "woche" (7 Tage, Standard), "monat" (30 Tage), "60tage" (60 Tage), oder eine Zahl 1-60. Nutze diese Aktion IMMER wenn Sir nach Terminen fragt. Für Fragen wie "was ist am 1. Mai" nutze "woche" oder "monat" je nach Datum. Zeige nur den Titel und das Datum — nenne KEINEN Kalender-Namen, der in eckigen Klammern stehen könnte.
 [ACTION:LICHT] raum befehl - Licht per Home Assistant steuern. Raeume: alle, wohnzimmer, kueche, buero, flur, schlafzimmer, balkon, nachtschrank, sideboard, iris. Befehle: "an", "aus", oder Prozentzahl fuer Helligkeit (z.B. "50"). Beispiele: "wohnzimmer an", "alles aus", "buero 50". Nutze diese Aktion IMMER wenn Sir Licht ein- oder ausschalten oder dimmen moechte.
 
 WENN {USER_NAME} "Jarvis activate" sagt:
@@ -587,6 +587,12 @@ end tell'''
             days = 1
         elif zeitraum == "morgen":
             days = 2
+        elif zeitraum in ("monat", "month"):
+            days = 30
+        elif zeitraum in ("2monat", "2monate", "60tage"):
+            days = 60
+        elif zeitraum.isdigit():
+            days = max(1, min(int(zeitraum), 60))
         else:
             days = 7
         events = get_calendar_sync(days=days)
