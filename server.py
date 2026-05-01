@@ -169,44 +169,7 @@ end tell'''
         return []
 
 
-_DE_MONTHS = {
-    "januar": 1, "februar": 2, "märz": 3, "april": 4, "mai": 5, "juni": 6,
-    "juli": 7, "august": 8, "september": 9, "oktober": 10, "november": 11, "dezember": 12,
-}
-
 _DE_WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
-
-
-def _parse_de_date(s: str) -> str:
-    """Convert German AppleScript date to a human-readable relative label.
-
-    E.g. 'Mittwoch, 29. April 2026 um 06:45:00' → 'morgen (Mittwoch) 06:45 Uhr'
-    Claude must not compute weekdays itself — we do it here.
-    """
-    import re
-    from datetime import date, datetime
-    m = re.search(r"(\d{1,2})\.\s+(\w+)\s+(\d{4})\s+um\s+(\d{2}):(\d{2})", s)
-    if not m:
-        return s
-    day, month_name, year, hour, minute = m.groups()
-    month = _DE_MONTHS.get(month_name.lower(), 0)
-    if not month:
-        return s
-    try:
-        dt = datetime(int(year), month, int(day), int(hour), int(minute))
-        delta = (dt.date() - date.today()).days
-        weekday = _DE_WEEKDAYS[dt.weekday()]
-        time_str = f" {hour}:{minute} Uhr" if not (hour == "00" and minute == "00") else ""
-        if delta == 0:
-            return f"heute{time_str} ({weekday})"
-        elif delta == 1:
-            return f"morgen{time_str} ({weekday})"
-        elif delta == 2:
-            return f"uebermorgen{time_str} ({weekday})"
-        else:
-            return f"{weekday}, {int(day):02d}.{month:02d}.{time_str} (in {delta} Tagen)"
-    except Exception:
-        return s
 
 
 def _label_from_dt(dt) -> str:
@@ -225,121 +188,59 @@ def _label_from_dt(dt) -> str:
         return f"{weekday}, {dt.strftime('%d.%m.')}{time_str} (in {delta} Tagen)"
 
 
-def _de_date_to_datetime(s: str):
-    """Parse German AppleScript date string to datetime. Returns None if unparseable."""
-    import re
-    from datetime import datetime
-    m = re.search(r"(\d{1,2})\.\s+(\w+)\s+(\d{4})\s+um\s+(\d{2}):(\d{2})", s)
-    if not m:
-        return None
-    day, month_name, year, hour, minute = m.groups()
-    month = _DE_MONTHS.get(month_name.lower(), 0)
-    if not month:
-        return None
-    try:
-        return datetime(int(year), month, int(day), int(hour), int(minute))
-    except Exception:
-        return None
-
-
 def get_calendar_sync(days: int = 7) -> list[str]:
-    """Read upcoming calendar events, resolving recurring event occurrences via RRULE."""
-    from datetime import datetime, date, timedelta
-    from dateutil.rrule import rrulestr
+    """Fetch calendar events from Home Assistant CalDAV integration."""
+    import urllib.request
+    from datetime import datetime, timedelta
 
-    skip = "ALW_Abfallkalender_2018-12-01_2019-11-30", "Siri-Vorschläge", "Geplante Erinnerungen"
-    skip_as = "{" + ", ".join(f'"{s}"' for s in skip) + "}"
+    calendars = [
+        "calendar.kalender",
+        "calendar.dienstliches",
+        "calendar.a_dienst",
+        "calendar.stammtisch",
+        "calendar.arzttermine",
+        "calendar.family",
+    ]
+    headers = {"Authorization": f"Bearer {HA_TOKEN}"}
 
-    # Use named calendar references (calendar "Name") instead of iterated references
-    # (repeat with c in every calendar) — the latter causes compound whose-filters to fail
-    # with error -1728 on large iCloud calendars. 1100-day lookback catches monthly recurring
-    # events created years ago (e.g. FREQ=MONTHLY series from 2023/2024).
-    script = f'''
-tell application "Calendar"
-    set output to ""
-    set lookback to current date - (1100 * days)
-    set lookahead to current date + ({days} * days)
-    -- Collect unique calendar names first, then query each by name for reliable filter behaviour
-    set calNames to {{}}
-    set seenNames to {{}}
-    repeat with c in every calendar
-        set n to name of c as string
-        if n is not in seenNames then
-            set end of calNames to n
-            set end of seenNames to n
-        end if
-    end repeat
-    repeat with cName in calNames
-        if cName is not in {skip_as} then
-            try
-                set cal to calendar cName
-                set evts to (every event of cal whose start date >= lookback and start date <= lookahead)
-                repeat with e in evts
-                    set recur to recurrence of e
-                    set rStr to ""
-                    if recur is not missing value then set rStr to recur
-                    set output to output & (summary of e) & "|||" & cName & "|||" & ((start date of e) as string) & "|||" & rStr & "\\n"
-                end repeat
-            end try
-        end if
-    end repeat
-    if output is "" then return "Keine Termine"
-    return output
-end tell'''
-    try:
-        r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=90)
-        if not (r.returncode == 0 and r.stdout.strip() and r.stdout.strip() != "Keine Termine"):
-            return []
+    start_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    end_dt = start_dt + timedelta(days=days)
+    start_str = start_dt.strftime('%Y-%m-%dT%H:%M:%S')
+    end_str = end_dt.strftime('%Y-%m-%dT%H:%M:%S')
 
-        now = datetime.now()
-        window_end = now + timedelta(days=days)
-        seen: set[str] = set()
-        results: list[tuple[datetime, str]] = []
-
-        for line in r.stdout.strip().split("\n"):
-            parts = line.strip().split("|||")
-            if len(parts) < 3:
-                continue
-            title, cal, date_str = parts[0], parts[1], parts[2]
-            rrule_str = parts[3].strip() if len(parts) > 3 else ""
-
-            series_start = _de_date_to_datetime(date_str)
-            if series_start is None:
-                continue
-
-            occurrences: list[datetime] = []
-            if rrule_str:
-                try:
-                    rule = rrulestr(rrule_str, dtstart=series_start, ignoretz=True)
-                    occurrences = list(rule.between(now, window_end, inc=True))
-                except Exception:
-                    if now <= series_start <= window_end:
-                        occurrences = [series_start]
-            else:
-                if now <= series_start <= window_end:
-                    occurrences = [series_start]
-
-            for occ in occurrences:
-                key = f"{title}|{occ.strftime('%Y-%m-%d %H:%M')}"
-                if key in seen:
+    seen_occ: set[str] = set()
+    results: list[tuple[datetime, str]] = []
+    for entity_id in calendars:
+        try:
+            url = f"{HA_URL}/api/calendars/{entity_id}?start={start_str}&end={end_str}"
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                events = json.loads(resp.read())
+            for e in events:
+                title = e.get('summary', '').strip()
+                if not title:
                     continue
-                seen.add(key)
-                results.append((occ, title, cal))
+                s = e['start'].get('dateTime') or e['start'].get('date')
+                if 'T' in s:
+                    dt = datetime.fromisoformat(s).replace(tzinfo=None)
+                else:
+                    dt = datetime.fromisoformat(s)
+                key = f"{title}|{dt.strftime('%Y-%m-%d %H:%M')}"
+                if key not in seen_occ:
+                    seen_occ.add(key)
+                    results.append((dt, title))
+        except Exception:
+            continue
 
-        results.sort(key=lambda x: x[0])
-        # For recurring events with the same title, show only the next occurrence.
-        # Multiple "Tagschicht" entries clutter the summary — next one is enough.
-        seen_titles: set[str] = set()
-        lines = []
-        for occ, title, cal in results:
-            title_key = f"{title}|{cal}"
-            if title_key in seen_titles:
-                continue
-            seen_titles.add(title_key)
-            lines.append(f"{title} -- {_label_from_dt(occ)}")
-        return lines
-    except Exception:
-        return []
+    results.sort(key=lambda x: x[0])
+    seen_titles: set[str] = set()
+    lines = []
+    for dt, title in results:
+        if title in seen_titles:
+            continue
+        seen_titles.add(title)
+        lines.append(f"{title} -- {_label_from_dt(dt)}")
+    return lines
 
 
 def get_mail_sync():
