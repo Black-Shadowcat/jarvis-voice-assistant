@@ -66,7 +66,9 @@ echo "[2/4] Opening Jarvis in Chrome app mode..."
 nohup /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
     --app=http://localhost:8340 \
     --autoplay-policy=no-user-gesture-required \
-    --user-data-dir="$HOME/.jarvis-chrome-profile" > /dev/null 2>&1 &
+    --user-data-dir="$HOME/.jarvis-chrome-profile" \
+    --window-size=959,579 \
+    --window-position=0,30 > /dev/null 2>&1 &
 echo "  → Chrome app mode opened"
 
 # 3. Open configured apps
@@ -91,19 +93,6 @@ fi
 echo "[4/5] Arranging windows..."
 sleep 4
 osascript << 'APPLESCRIPT'
--- Position Chrome app-mode window (URL already set via --app flag)
-tell application "System Events" to tell process "Google Chrome"
-    set retries to 0
-    repeat while (count of windows) = 0 and retries < 20
-        delay 0.5
-        set retries to retries + 1
-    end repeat
-    if (count of windows) > 0 then
-        set size of front window to {959, 579}
-        set position of front window to {0, 30}
-    end if
-end tell
-
 tell application "System Events" to tell process "Code"
     set size of front window to {959, 579}
     set position of front window to {961, 30}
