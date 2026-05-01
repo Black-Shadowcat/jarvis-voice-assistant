@@ -65,7 +65,8 @@ fi
 echo "[2/4] Opening Jarvis in Chrome app mode..."
 nohup /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
     --app=http://localhost:8340 \
-    --autoplay-policy=no-user-gesture-required > /dev/null 2>&1 &
+    --autoplay-policy=no-user-gesture-required \
+    --user-data-dir="$HOME/.jarvis-chrome-profile" > /dev/null 2>&1 &
 echo "  → Chrome app mode opened"
 
 # 3. Open configured apps
