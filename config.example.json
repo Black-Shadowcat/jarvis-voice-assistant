@@ -5,9 +5,15 @@
   "user_name": "YOUR_NAME",
   "user_address": "Sir",
   "city": "Hamburg",
-  "workspace_path": "/Users/matthias/Projects/jarvis-voice-assistant",
+  "lat": 53.55,
+  "lon": 10.00,
+  "kachelmann_api_key": "YOUR_KACHELMANN_API_KEY",
+  "ha_url": "http://YOUR_HA_IP:8123",
+  "ha_token": "YOUR_HA_LONG_LIVED_TOKEN",
+  "ha_enabled": true,
+  "workspace_path": "/Users/YOUR_USERNAME/jarvis-voice-assistant",
   "spotify_track": "spotify:track:YOUR_TRACK_ID",
   "browser_url": "https://your-website.com",
-  "obsidian_inbox_path": "/Users/matthias/Documents/Obsidian",
+  "obsidian_inbox_path": "/Users/YOUR_USERNAME/Documents/Obsidian/Inbox",
   "apps": ["Mail", "Safari", "Visual Studio Code", "Music"]
 }

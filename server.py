@@ -6,6 +6,7 @@ speaks with ElevenLabs, controls browser with Playwright.
 
 import asyncio
 import base64
+import io
 import json
 import os
 import re
@@ -14,9 +15,9 @@ import time
 
 import anthropic
 import httpx
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 # Load config
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
@@ -675,6 +676,147 @@ async def websocket_endpoint(ws: WebSocket):
 
     except WebSocketDisconnect:
         conversations.pop(session_id, None)
+
+
+@app.get("/config")
+async def serve_config():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "config.html"))
+
+
+@app.get("/api/config")
+async def get_config_api():
+    with open(CONFIG_PATH, "r") as f:
+        return json.load(f)
+
+
+@app.post("/api/config")
+async def save_config_api(request: Request):
+    global ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
+    global USER_NAME, USER_ADDRESS, CITY, LAT, LON
+    global KACHELMANN_KEY, HA_URL, HA_TOKEN, ai
+
+    data = await request.json()
+
+    with open(CONFIG_PATH, "r") as f:
+        cfg = json.load(f)
+
+    allowed = [
+        "anthropic_api_key", "elevenlabs_api_key", "elevenlabs_voice_id",
+        "user_name", "user_address", "city", "lat", "lon",
+        "kachelmann_api_key", "ha_url", "ha_token", "ha_enabled",
+        "workspace_path", "obsidian_inbox_path", "browser_url",
+        "spotify_track_uri", "apps",
+    ]
+    for field in allowed:
+        if field in data:
+            cfg[field] = data[field]
+
+    errors = []
+    if cfg.get("anthropic_api_key") and not cfg["anthropic_api_key"].startswith("sk-ant-"):
+        errors.append("Anthropic API Key hat unerwartetes Format")
+
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+    # Update in-memory globals so Jarvis uses new settings without restart
+    ANTHROPIC_API_KEY = cfg.get("anthropic_api_key", ANTHROPIC_API_KEY)
+    ELEVENLABS_API_KEY = cfg.get("elevenlabs_api_key", ELEVENLABS_API_KEY)
+    ELEVENLABS_VOICE_ID = cfg.get("elevenlabs_voice_id", ELEVENLABS_VOICE_ID)
+    USER_NAME = cfg.get("user_name", USER_NAME)
+    USER_ADDRESS = cfg.get("user_address", USER_ADDRESS)
+    CITY = cfg.get("city", CITY)
+    LAT = cfg.get("lat", LAT)
+    LON = cfg.get("lon", LON)
+    KACHELMANN_KEY = cfg.get("kachelmann_api_key", KACHELMANN_KEY)
+    HA_URL = cfg.get("ha_url", "").rstrip("/")
+    HA_TOKEN = cfg.get("ha_token", HA_TOKEN)
+    ai = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+
+    print(f"[jarvis] Config gespeichert via UI", flush=True)
+    return {"status": "saved", "errors": errors}
+
+
+@app.post("/api/test/anthropic")
+async def test_anthropic_key(request: Request):
+    data = await request.json()
+    api_key = data.get("api_key", "")
+    if not api_key:
+        return {"valid": False, "message": "Kein API Key angegeben"}
+    try:
+        test_client = anthropic.AsyncAnthropic(api_key=api_key)
+        resp = await test_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=5,
+            messages=[{"role": "user", "content": "Hi"}],
+        )
+        return {"valid": True, "message": "API Key gültig ✓"}
+    except Exception as e:
+        msg = str(e)
+        if "authentication" in msg.lower() or "api_key" in msg.lower() or "401" in msg:
+            return {"valid": False, "message": "Ungültiger API Key"}
+        return {"valid": False, "message": f"Fehler: {msg[:120]}"}
+
+
+@app.post("/api/test/elevenlabs")
+async def test_elevenlabs_key(request: Request):
+    data = await request.json()
+    api_key = data.get("api_key", "")
+    if not api_key:
+        return {"valid": False, "message": "Kein API Key angegeben"}
+    try:
+        resp = await http.get(
+            "https://api.elevenlabs.io/v1/user",
+            headers={"xi-api-key": api_key},
+        )
+        if resp.status_code == 200:
+            sub = resp.json().get("subscription", {})
+            used = sub.get("character_count", 0)
+            limit = sub.get("character_limit", 0)
+            return {"valid": True, "message": f"API Key gültig ✓  —  {used:,} / {limit:,} Zeichen"}
+        return {"valid": False, "message": f"Ungültiger API Key (HTTP {resp.status_code})"}
+    except Exception as e:
+        return {"valid": False, "message": f"Verbindungsfehler: {str(e)[:100]}"}
+
+
+@app.get("/api/elevenlabs/voices")
+async def get_elevenlabs_voices():
+    try:
+        resp = await http.get(
+            "https://api.elevenlabs.io/v1/voices",
+            headers={"xi-api-key": ELEVENLABS_API_KEY},
+        )
+        if resp.status_code == 200:
+            voices = [
+                {
+                    "id": v["voice_id"],
+                    "name": v["name"],
+                    "language": v.get("labels", {}).get("language", ""),
+                    "accent": v.get("labels", {}).get("accent", ""),
+                }
+                for v in resp.json().get("voices", [])
+            ]
+            return sorted(voices, key=lambda x: x["name"])
+    except Exception:
+        pass
+    return []
+
+
+@app.post("/api/elevenlabs/preview")
+async def preview_elevenlabs_voice(request: Request):
+    data = await request.json()
+    voice_id = data.get("voice_id", ELEVENLABS_VOICE_ID)
+    text = data.get("text", "Guten Tag, Sir. Jarvis zu Ihren Diensten.")
+    api_key = data.get("api_key", ELEVENLABS_API_KEY)
+
+    resp = await http.post(
+        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+        headers={"xi-api-key": api_key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
+        json={"text": text, "model_id": "eleven_turbo_v2_5",
+              "voice_settings": {"stability": 0.5, "similarity_boost": 0.85}},
+    )
+    if resp.status_code == 200:
+        return StreamingResponse(io.BytesIO(resp.content), media_type="audio/mpeg")
+    return StreamingResponse(io.BytesIO(b""), status_code=400, media_type="audio/mpeg")
 
 
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "frontend")), name="static")

@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0a0a0f">
+    <title>J.A.R.V.I.S. — Config</title>
+
+    <script>
+        tailwind = { config: {
+            theme: { extend: { colors: {
+                'j-bg':   '#0a0a0f',
+                'j-card': '#0d1b2a',
+                'j-blue': '#2a6cb8',
+                'j-blue-dim': '#1a3a5c',
+                'j-gold': '#c9a227',
+                'j-green': '#27c96a',
+                'j-text': '#e0e0e0',
+                'j-muted': '#888',
+                'j-dim':  '#3a3a4a',
+            }}}
+        }}
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+
+    <style>
+        body { background: #0a0a0f; }
+
+        .card {
+            background: linear-gradient(145deg, #0d1b2a 0%, #080f1a 100%);
+            border: 1px solid rgba(42, 108, 184, 0.18);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+        }
+
+        .field {
+            background: #060d18;
+            border: 1px solid rgba(42, 108, 184, 0.22);
+            color: #e0e0e0;
+            border-radius: 0.5rem;
+            padding: 0.625rem 0.75rem;
+            font-size: 0.875rem;
+            width: 100%;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .field:focus {
+            outline: none;
+            border-color: rgba(42, 108, 184, 0.6);
+            box-shadow: 0 0 0 3px rgba(42, 108, 184, 0.12);
+        }
+        .field::placeholder { color: #3a3a5a; }
+        select.field option { background: #0d1b2a; }
+
+        .label {
+            display: block;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            color: #666;
+            margin-bottom: 0.4rem;
+            text-transform: uppercase;
+        }
+
+        .btn-test {
+            padding: 0.625rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(42,108,184,0.3);
+            color: #666;
+            font-size: 0.75rem;
+            font-weight: 500;
+            white-space: nowrap;
+            transition: all 0.15s;
+            background: transparent;
+            cursor: pointer;
+        }
+        .btn-test:hover:not(:disabled) { border-color: #2a6cb8; color: #4a9eff; }
+        .btn-test:disabled { opacity: 0.5; cursor: default; }
+        .btn-test.ok  { border-color: #27c96a; color: #27c96a; background: rgba(39,201,106,0.08); }
+        .btn-test.err { border-color: #e05252; color: #e05252; background: rgba(224,82,82,0.08); }
+
+        .btn-save {
+            padding: 0.625rem 1.5rem;
+            border-radius: 0.5rem;
+            background: #c9a227;
+            color: #0a0a0f;
+            font-size: 0.875rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.15s;
+            border: none;
+        }
+        .btn-save:hover:not(:disabled) { background: #d4ae35; }
+        .btn-save:disabled { opacity: 0.5; cursor: default; }
+
+        .btn-reset {
+            padding: 0.625rem 1.25rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(42,108,184,0.25);
+            color: #666;
+            font-size: 0.875rem;
+            cursor: pointer;
+            background: transparent;
+            transition: all 0.15s;
+        }
+        .btn-reset:hover { border-color: #2a6cb8; color: #4a9eff; }
+
+        .app-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 0.875rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(42,108,184,0.18);
+            font-size: 0.8rem;
+            color: #555;
+            cursor: pointer;
+            transition: all 0.15s;
+            background: transparent;
+            text-align: left;
+        }
+        .app-chip:hover { border-color: rgba(42,108,184,0.4); color: #888; }
+        .app-chip.active { border-color: #2a6cb8; color: #e0e0e0; background: rgba(42,108,184,0.1); }
+
+        .toggle-track {
+            position: relative; display: inline-flex;
+            width: 44px; height: 24px;
+            border-radius: 999px;
+            background: #1a2535;
+            border: 1px solid rgba(42,108,184,0.2);
+            cursor: pointer; transition: background 0.2s;
+        }
+        .toggle-track.on { background: #2a6cb8; border-color: #2a6cb8; }
+        .toggle-thumb {
+            position: absolute; top: 3px; left: 3px;
+            width: 16px; height: 16px;
+            border-radius: 50%; background: #e0e0e0;
+            transition: transform 0.2s;
+        }
+        .toggle-track.on .toggle-thumb { transform: translateX(20px); }
+
+        .eye-btn {
+            position: absolute; right: 0.625rem; top: 50%;
+            transform: translateY(-50%);
+            color: #3a3a5a; font-size: 0.8rem;
+            cursor: pointer; background: none; border: none;
+            padding: 0.2rem;
+        }
+        .eye-btn:hover { color: #666; }
+
+        .toast {
+            position: fixed; top: 1.25rem; right: 1.25rem; z-index: 100;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            background: #0d1b2a;
+            font-size: 0.85rem;
+            color: #e0e0e0;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            border-left: 3px solid #2a6cb8;
+            pointer-events: none;
+        }
+        .toast.success { border-color: #27c96a; }
+        .toast.error   { border-color: #e05252; }
+        .toast.info    { border-color: #2a6cb8; }
+
+        [x-cloak] { display: none; }
+        .spin { display: inline-block; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(42,108,184,0.2); border-radius: 2px; }
+    </style>
+</head>
+<body class="text-j-text min-h-screen">
+
+<div x-data="configApp()" x-init="init()" x-cloak>
+
+    <!-- Toast -->
+    <div x-show="toast.show"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 translate-x-4"
+         x-transition:enter-end="opacity-100 translate-x-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         :class="'toast ' + toast.type"
+         x-text="toast.message">
+    </div>
+
+    <div class="max-w-3xl mx-auto px-4 py-10">
+
+        <!-- Header -->
+        <div class="text-center mb-10">
+            <a href="/" class="inline-block mb-6 opacity-40 hover:opacity-70 transition-opacity text-xs tracking-widest text-j-muted">← ZURÜCK ZU JARVIS</a>
+            <h1 class="text-2xl font-light tracking-[0.3em] text-j-blue mb-1">J.A.R.V.I.S.</h1>
+            <p class="text-xs tracking-[0.25em] text-j-dim uppercase">Konfiguration</p>
+        </div>
+
+        <!-- ── API KEYS ── -->
+        <div class="card rounded-2xl p-6 mb-4">
+            <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-6">API Keys &amp; Services</h2>
+
+            <!-- Anthropic -->
+            <div class="mb-5">
+                <label class="label">Anthropic API Key</label>
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <input :type="show.anthropic ? 'text' : 'password'"
+                               x-model="cfg.anthropic_api_key"
+                               class="field pr-9 font-mono"
+                               placeholder="sk-ant-api03-…">
+                        <button class="eye-btn" @click="show.anthropic = !show.anthropic"
+                                :title="show.anthropic ? 'Verbergen' : 'Anzeigen'">
+                            <span x-text="show.anthropic ? '🙈' : '👁'"></span>
+                        </button>
+                    </div>
+                    <button class="btn-test"
+                            :class="{ ok: test.anthropic==='ok', err: test.anthropic==='err' }"
+                            :disabled="test.anthropic==='loading'"
+                            @click="testKey('anthropic')">
+                        <span x-show="test.anthropic==='loading'" class="spin">↻</span>
+                        <span x-show="test.anthropic!=='loading'"
+                              x-text="test.anthropic==='ok' ? '✓ OK' : test.anthropic==='err' ? '✗ Fehler' : 'Testen'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ElevenLabs Key -->
+            <div class="mb-5">
+                <label class="label">ElevenLabs API Key</label>
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <input :type="show.elevenlabs ? 'text' : 'password'"
+                               x-model="cfg.elevenlabs_api_key"
+                               class="field pr-9 font-mono"
+                               placeholder="sk_…">
+                        <button class="eye-btn" @click="show.elevenlabs = !show.elevenlabs">
+                            <span x-text="show.elevenlabs ? '🙈' : '👁'"></span>
+                        </button>
+                    </div>
+                    <button class="btn-test"
+                            :class="{ ok: test.elevenlabs==='ok', err: test.elevenlabs==='err' }"
+                            :disabled="test.elevenlabs==='loading'"
+                            @click="testKey('elevenlabs')">
+                        <span x-show="test.elevenlabs==='loading'" class="spin">↻</span>
+                        <span x-show="test.elevenlabs!=='loading'"
+                              x-text="test.elevenlabs==='ok' ? '✓ OK' : test.elevenlabs==='err' ? '✗ Fehler' : 'Testen'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Voice -->
+            <div>
+                <label class="label">ElevenLabs Voice</label>
+                <div class="flex gap-2">
+                    <select x-model="cfg.elevenlabs_voice_id" class="field flex-1">
+                        <option value="">— Voice auswählen —</option>
+                        <template x-for="v in voices" :key="v.id">
+                            <option :value="v.id"
+                                    :selected="v.id === cfg.elevenlabs_voice_id"
+                                    x-text="v.name + (v.language ? '  (' + v.language + ')' : '')">
+                            </option>
+                        </template>
+                    </select>
+                    <button class="btn-test" @click="previewVoice()" :disabled="previewing">
+                        <span x-show="previewing" class="spin">↻</span>
+                        <span x-show="!previewing">▶ Preview</span>
+                    </button>
+                </div>
+                <p class="mt-1.5 text-xs" :class="voices.length ? 'text-j-dim' : 'text-[#3a3a5a]'"
+                   x-text="voices.length ? voices.length + ' Voices geladen' : 'Voices werden geladen…'"></p>
+            </div>
+        </div>
+
+        <!-- ── USER PROFILE ── -->
+        <div class="card rounded-2xl p-6 mb-4">
+            <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-6">Nutzer-Profil</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="label">Name</label>
+                    <input x-model="cfg.user_name" type="text" class="field" placeholder="Matthias">
+                </div>
+                <div>
+                    <label class="label">Anrede (z.B. Sir, Chef, Herr X)</label>
+                    <input x-model="cfg.user_address" type="text" class="field" placeholder="Sir">
+                </div>
+                <div>
+                    <label class="label">Stadt</label>
+                    <input x-model="cfg.city" type="text" class="field" placeholder="Hamburg">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="label">Breitengrad</label>
+                        <input x-model.number="cfg.lat" type="number" step="0.0001" class="field" placeholder="53.55">
+                    </div>
+                    <div>
+                        <label class="label">Längengrad</label>
+                        <input x-model.number="cfg.lon" type="number" step="0.0001" class="field" placeholder="10.00">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── HOME ASSISTANT ── -->
+        <div class="card rounded-2xl p-6 mb-4">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold">Home Assistant</h2>
+                <div class="toggle-track" :class="{ on: cfg.ha_enabled }" @click="cfg.ha_enabled = !cfg.ha_enabled">
+                    <div class="toggle-thumb"></div>
+                </div>
+            </div>
+            <div :class="cfg.ha_enabled ? 'opacity-100' : 'opacity-30 pointer-events-none'"
+                 class="space-y-4 transition-opacity duration-200">
+                <div>
+                    <label class="label">Home Assistant URL</label>
+                    <input x-model="cfg.ha_url" type="text" class="field" placeholder="http://10.0.0.190:8123">
+                </div>
+                <div>
+                    <label class="label">Long-Lived Access Token</label>
+                    <div class="relative">
+                        <input :type="show.hatoken ? 'text' : 'password'"
+                               x-model="cfg.ha_token"
+                               class="field pr-9 font-mono"
+                               placeholder="eyJhbGci…">
+                        <button class="eye-btn" @click="show.hatoken = !show.hatoken">
+                            <span x-text="show.hatoken ? '🙈' : '👁'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── PFADE & DIENSTE ── -->
+        <div class="card rounded-2xl p-6 mb-4">
+            <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-6">Pfade &amp; Dienste</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="label">Kachelmann Wetter API Key</label>
+                    <div class="relative">
+                        <input :type="show.kachelmann ? 'text' : 'password'"
+                               x-model="cfg.kachelmann_api_key"
+                               class="field pr-9 font-mono"
+                               placeholder="ZNkF…">
+                        <button class="eye-btn" @click="show.kachelmann = !show.kachelmann">
+                            <span x-text="show.kachelmann ? '🙈' : '👁'"></span>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="label">Workspace Pfad</label>
+                    <input x-model="cfg.workspace_path" type="text" class="field font-mono"
+                           placeholder="/Users/matthias/jarvis-voice-assistant">
+                </div>
+                <div>
+                    <label class="label">Obsidian Inbox Pfad</label>
+                    <input x-model="cfg.obsidian_inbox_path" type="text" class="field font-mono"
+                           placeholder="/Users/matthias/Obsidian/Inbox">
+                </div>
+                <div>
+                    <label class="label">Browser Start-URL</label>
+                    <input x-model="cfg.browser_url" type="text" class="field"
+                           placeholder="https://google.com">
+                </div>
+                <div>
+                    <label class="label">Spotify Track URI</label>
+                    <input x-model="cfg.spotify_track" type="text" class="field font-mono"
+                           placeholder="spotify:track:…">
+                </div>
+            </div>
+        </div>
+
+        <!-- ── APPS ── -->
+        <div class="card rounded-2xl p-6 mb-8">
+            <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-6">Apps beim Start öffnen</h2>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <template x-for="app in allApps" :key="app">
+                    <button class="app-chip"
+                            :class="{ active: hasApp(app) }"
+                            @click="toggleApp(app)">
+                        <span x-text="hasApp(app) ? '☑' : '☐'" class="text-base leading-none flex-shrink-0"></span>
+                        <span x-text="app" class="truncate"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        <!-- ── FOOTER BUTTONS ── -->
+        <div class="flex items-center justify-between">
+            <a href="/" class="text-xs text-j-dim hover:text-j-muted transition-colors">← Zurück zu Jarvis</a>
+            <div class="flex gap-3">
+                <button class="btn-reset" @click="reset()">↻ Zurücksetzen</button>
+                <button class="btn-save" @click="save()" :disabled="saving">
+                    <span x-show="saving" class="spin mr-1">↻</span>
+                    💾 Speichern
+                </button>
+            </div>
+        </div>
+
+    </div><!-- /container -->
+</div><!-- /x-data -->
+
+<script>
+function configApp() {
+    return {
+        cfg: {},
+        voices: [],
+        allApps: ['Mail', 'Safari', 'Visual Studio Code', 'Music', 'Home Assistant', 'Spotify'],
+        toast: { show: false, type: 'info', message: '' },
+        test: { anthropic: null, elevenlabs: null },
+        show: { anthropic: false, elevenlabs: false, hatoken: false, kachelmann: false },
+        saving: false,
+        previewing: false,
+        _toastTimer: null,
+
+        async init() {
+            await this.loadConfig();
+            this.loadVoices();
+        },
+
+        async loadConfig() {
+            try {
+                const r = await fetch('/api/config');
+                const data = await r.json();
+                if (data.ha_enabled === undefined) data.ha_enabled = !!(data.ha_url);
+                this.cfg = data;
+            } catch (e) {
+                this.showToast('error', 'Fehler beim Laden der Konfiguration');
+            }
+        },
+
+        async loadVoices() {
+            try {
+                const r = await fetch('/api/elevenlabs/voices');
+                if (r.ok) this.voices = await r.json();
+            } catch (e) {}
+        },
+
+        hasApp(name) { return (this.cfg.apps || []).includes(name); },
+
+        toggleApp(name) {
+            const apps = this.cfg.apps || [];
+            this.cfg.apps = apps.includes(name)
+                ? apps.filter(a => a !== name)
+                : [...apps, name];
+        },
+
+        async save() {
+            this.saving = true;
+            try {
+                const r = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.cfg),
+                });
+                const result = await r.json();
+                if (result.status === 'saved') {
+                    const warn = result.errors?.length ? `  (${result.errors.length} Warnung)` : '';
+                    this.showToast('success', '✓ Einstellungen gespeichert' + warn);
+                } else {
+                    this.showToast('error', 'Speichern fehlgeschlagen');
+                }
+            } catch (e) {
+                this.showToast('error', 'Netzwerkfehler beim Speichern');
+            }
+            this.saving = false;
+        },
+
+        async reset() {
+            await this.loadConfig();
+            await this.loadVoices();
+            this.showToast('info', 'Auf gespeicherte Werte zurückgesetzt');
+        },
+
+        async testKey(type) {
+            this.test = { ...this.test, [type]: 'loading' };
+            const api_key = type === 'anthropic'
+                ? this.cfg.anthropic_api_key
+                : this.cfg.elevenlabs_api_key;
+            try {
+                const r = await fetch(`/api/test/${type}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key }),
+                });
+                const result = await r.json();
+                const state = result.valid ? 'ok' : 'err';
+                this.test = { ...this.test, [type]: state };
+                this.showToast(result.valid ? 'success' : 'error', result.message);
+                setTimeout(() => { this.test = { ...this.test, [type]: null }; }, 5000);
+            } catch (e) {
+                this.test = { ...this.test, [type]: 'err' };
+                this.showToast('error', 'Verbindungsfehler');
+            }
+        },
+
+        async previewVoice() {
+            if (!this.cfg.elevenlabs_voice_id) {
+                this.showToast('error', 'Bitte zuerst eine Voice auswählen');
+                return;
+            }
+            this.previewing = true;
+            try {
+                const r = await fetch('/api/elevenlabs/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ voice_id: this.cfg.elevenlabs_voice_id }),
+                });
+                if (r.ok) {
+                    const blob = await r.blob();
+                    const audio = new Audio(URL.createObjectURL(blob));
+                    audio.play();
+                } else {
+                    this.showToast('error', 'Preview fehlgeschlagen');
+                }
+            } catch (e) {
+                this.showToast('error', 'Fehler beim Audio-Preview');
+            }
+            this.previewing = false;
+        },
+
+        showToast(type, message) {
+            clearTimeout(this._toastTimer);
+            this.toast = { show: true, type, message };
+            this._toastTimer = setTimeout(() => { this.toast.show = false; }, 5000);
+        },
+    };
+}
+</script>
+</body>
+</html>

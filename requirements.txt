@@ -6,3 +6,4 @@ playwright>=1.40.0
 Pillow>=10.0.0
 websockets>=13.0
 keyboard>=0.13.5
+rumps>=0.4.0
