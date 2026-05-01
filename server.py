@@ -298,7 +298,8 @@ def build_system_prompt():
     if WEATHER_INFO:
         w = WEATHER_INFO
         wind = f", Wind {w['wind_kmh']} km/h" if w.get('wind_kmh') else ""
-        temp_str = str(w['temp']).replace('.', ',')
+        t = w['temp']
+        temp_str = str(int(t)) if t == int(t) else str(t).replace('.', ' Komma ')
         weather_block = f"\nWetter {CITY}: {temp_str} Grad, {w['description']}{wind}"
 
     task_block = ""
@@ -321,7 +322,7 @@ def build_system_prompt():
 
 WICHTIG: Schreibe NIEMALS Regieanweisungen, Emotionen oder Tags in eckigen Klammern wie [sarcastic] [formal] [amused] [dry] oder aehnliches. Dein Sarkasmus muss REIN durch die Wortwahl kommen. Alles was du schreibst wird laut vorgelesen.
 
-AUSSPRACHE: Schreibe Temperaturen immer als "X Grad" oder "X,Y Grad" — niemals als "°C". Schreibe Uhrzeiten immer als "X Uhr" (z.B. "20 Uhr") oder "X Uhr Y" (z.B. "20 Uhr 5") — niemals als "20:00 Uhr" oder "20:05 Uhr".
+AUSSPRACHE: Schreibe Temperaturen immer als "X Grad" oder "X Komma Y Grad" — niemals als "°C". Schreibe Uhrzeiten immer als "X Uhr" (z.B. "20 Uhr") oder "X Uhr Y" (z.B. "20 Uhr 5") — niemals als "20:00 Uhr" oder "20:05 Uhr".
 
 Du hast die volle Kontrolle ueber den Browser von {USER_NAME}. Du kannst im Internet suchen, Webseiten oeffnen und den Bildschirm sehen. Wenn Sir dich bittet etwas nachzuschauen, zu recherchieren, zu googeln, eine Seite zu oeffnen, oder irgendetwas im Internet zu tun — nutze IMMER eine Aktion. Frag nicht ob du es tun sollst, tu es einfach.
 
