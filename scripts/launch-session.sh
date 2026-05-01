@@ -104,7 +104,8 @@ nohup "$CHROME_BIN" \
     --no-first-run \
     --disable-restore-session-state \
     --no-default-browser-check \
-    --disable-gpu > /tmp/jarvis-chrome.log 2>&1 &
+    --disable-gpu \
+    --in-process-gpu > /tmp/jarvis-chrome.log 2>&1 &
 CHROME_PID=$!
 echo "  → Chrome launched (PID: $CHROME_PID)"
 
@@ -124,8 +125,7 @@ if ! pgrep -f "jarvis-chrome-profile" > /dev/null 2>&1; then
         --disable-restore-session-state \
         --no-default-browser-check \
         --disable-gpu \
-        --disable-gpu-sandbox \
-        --disable-software-rasterizer > /tmp/jarvis-chrome.log 2>&1 &
+        --in-process-gpu > /tmp/jarvis-chrome.log 2>&1 &
     echo "  → Chrome retry launched (PID: $!)"
     sleep 4
 else
