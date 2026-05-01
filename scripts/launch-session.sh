@@ -65,7 +65,17 @@ fi
 # profile as "crashed", which shows a restore-dialog instead of the JARVIS URL.
 echo "[2/5] Opening Jarvis in Chrome app mode..."
 
-JARVIS_PREF="$JARVIS_PROFILE/Default/Preferences"
+JARVIS_DEFAULT="$JARVIS_PROFILE/Default"
+JARVIS_PREF="$JARVIS_DEFAULT/Preferences"
+
+# Clear corrupted caches — root cause of GPU crash + window closing
+rm -rf "$JARVIS_DEFAULT/Cache" \
+       "$JARVIS_DEFAULT/Code Cache" \
+       "$JARVIS_DEFAULT/GPUCache" \
+       "$JARVIS_DEFAULT/blob_storage" 2>/dev/null
+echo "  → Chrome cache cleared"
+
+# Reset crash-state so Chrome skips the restore-pages dialog
 if [[ -f "$JARVIS_PREF" ]]; then
     /opt/homebrew/bin/python3.11 - <<PYEOF 2>/dev/null
 import json
@@ -76,14 +86,14 @@ p.setdefault("profile", {})["exited_cleanly"] = True
 with open("$JARVIS_PREF", "w") as f:
     json.dump(p, f)
 PYEOF
-    echo "  → Chrome profile crash-state cleared"
+    echo "  → Chrome crash-state cleared"
 fi
 
 # Kill any stale JARVIS Chrome instance from previous session
 pkill -f "jarvis-chrome-profile" 2>/dev/null
 sleep 1
 
-# Launch Chrome — binary directly so flags work even when Chrome is already open
+# Launch Chrome — binary directly so flags work even when Chrome is already running
 nohup "$CHROME_BIN" \
     --app=http://localhost:8340 \
     --autoplay-policy=no-user-gesture-required \
@@ -93,15 +103,16 @@ nohup "$CHROME_BIN" \
     --force-dark-mode \
     --no-first-run \
     --disable-restore-session-state \
-    --no-default-browser-check > /tmp/jarvis-chrome.log 2>&1 &
+    --no-default-browser-check \
+    --disable-gpu-sandbox > /tmp/jarvis-chrome.log 2>&1 &
 CHROME_PID=$!
 echo "  → Chrome launched (PID: $CHROME_PID)"
 
 # Wait and verify Chrome is actually running — retry once if it died
-sleep 4
+sleep 5
 if ! pgrep -f "jarvis-chrome-profile" > /dev/null 2>&1; then
-    echo "  → Chrome did not start — retrying in 3s..."
-    sleep 3
+    echo "  → Chrome did not stay running — retrying..."
+    sleep 2
     nohup "$CHROME_BIN" \
         --app=http://localhost:8340 \
         --autoplay-policy=no-user-gesture-required \
@@ -111,9 +122,10 @@ if ! pgrep -f "jarvis-chrome-profile" > /dev/null 2>&1; then
         --force-dark-mode \
         --no-first-run \
         --disable-restore-session-state \
-        --no-default-browser-check > /tmp/jarvis-chrome.log 2>&1 &
+        --no-default-browser-check \
+        --disable-gpu-sandbox > /tmp/jarvis-chrome.log 2>&1 &
     echo "  → Chrome retry launched (PID: $!)"
-    sleep 3
+    sleep 4
 else
     echo "  → Chrome running OK"
 fi
