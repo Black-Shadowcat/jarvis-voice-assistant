@@ -60,14 +60,10 @@ else
     done
 fi
 
-# 2. Open browser (URL will be loaded by AppleScript below to ensure correct tab)
-echo "[2/4] Opening browser..."
-open -a "Safari"
-if [[ -n "$BROWSER_URL" ]]; then
-    sleep 2
-    open "$BROWSER_URL"
-fi
-echo "  → Browser opened"
+# 2. Open Jarvis in Chrome app mode (no address bar, tabs or browser chrome)
+echo "[2/4] Opening Jarvis in Chrome app mode..."
+open -a "Google Chrome" --args --app=http://localhost:8340
+echo "  → Chrome app mode opened"
 
 # 3. Open configured apps
 echo "[3/5] Opening apps..."
@@ -91,25 +87,17 @@ fi
 echo "[4/5] Arranging windows..."
 sleep 4
 osascript << 'APPLESCRIPT'
--- Wait for Safari to have at least one window
-tell application "Safari"
-    activate
-    delay 0.5
+-- Position Chrome app-mode window (URL already set via --app flag)
+tell application "System Events" to tell process "Google Chrome"
     set retries to 0
-    repeat while (count of windows) = 0 and retries < 10
+    repeat while (count of windows) = 0 and retries < 20
         delay 0.5
         set retries to retries + 1
     end repeat
-    if (count of windows) = 0 then
-        make new document
-        delay 0.5
+    if (count of windows) > 0 then
+        set size of front window to {959, 579}
+        set position of front window to {0, 30}
     end if
-    set URL of front document to "http://localhost:8340"
-    delay 1.5
-end tell
-tell application "System Events" to tell process "Safari"
-    set size of front window to {959, 579}
-    set position of front window to {0, 30}
 end tell
 
 tell application "System Events" to tell process "Code"
