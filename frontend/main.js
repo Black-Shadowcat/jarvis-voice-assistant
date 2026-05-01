@@ -31,6 +31,13 @@ function unlockAudio() {
             audioUnlocked = true;
             console.log('[jarvis] Audio unlocked');
         }).catch(() => {});
+        // Pre-warm microphone permission on first click so Safari shows the dialog
+        // here (on explicit user gesture) instead of mid-sentence later.
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => stream.getTracks().forEach(t => t.stop()))
+                .catch(() => {});
+        }
     }
 }
 document.addEventListener('click', unlockAudio, { once: false });
