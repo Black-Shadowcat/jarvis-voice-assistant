@@ -382,8 +382,7 @@ async def synthesize_speech(text: str) -> bytes:
     else:
         chunks = [text]
 
-    audio_parts = []
-    for chunk in chunks:
+    async def _tts_chunk(chunk: str) -> bytes:
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
         try:
             resp = await http.post(url, headers={
@@ -395,15 +394,15 @@ async def synthesize_speech(text: str) -> bytes:
                 "model_id": "eleven_turbo_v2_5",
                 "voice_settings": {"stability": 0.5, "similarity_boost": 0.85},
             })
-            print(f"  TTS chunk status: {resp.status_code}, size: {len(resp.content)}", flush=True)
             if resp.status_code == 200:
-                audio_parts.append(resp.content)
-            else:
-                print(f"  TTS error body: {resp.text[:200]}", flush=True)
+                return resp.content
+            print(f"  TTS error: {resp.status_code} {resp.text[:100]}", flush=True)
         except Exception as e:
             print(f"  TTS EXCEPTION: {e}", flush=True)
+        return b""
 
-    return b"".join(audio_parts)
+    parts = await asyncio.gather(*[_tts_chunk(c) for c in chunks])
+    return b"".join(parts)
 
 
 async def execute_action(action: dict) -> str:
@@ -584,10 +583,6 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
     """Process message and send responses via WebSocket."""
     if session_id not in conversations:
         conversations[session_id] = []
-
-    # Refresh weather + tasks on activate
-    if "activate" in user_text.lower():
-        refresh_data()
 
     conversations[session_id].append({"role": "user", "content": user_text})
     history = conversations[session_id][-16:]
