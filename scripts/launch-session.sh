@@ -104,9 +104,7 @@ nohup "$CHROME_BIN" \
     --no-first-run \
     --disable-restore-session-state \
     --no-default-browser-check \
-    --disable-gpu \
-    --disable-gpu-sandbox \
-    --disable-software-rasterizer > /tmp/jarvis-chrome.log 2>&1 &
+    --disable-gpu > /tmp/jarvis-chrome.log 2>&1 &
 CHROME_PID=$!
 echo "  → Chrome launched (PID: $CHROME_PID)"
 
