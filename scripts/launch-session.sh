@@ -61,8 +61,10 @@ else
 fi
 
 # 2. Open Jarvis in Chrome app mode (no address bar, tabs or browser chrome)
+# Use binary directly — "open -a" ignores --args when Chrome is already running
 echo "[2/4] Opening Jarvis in Chrome app mode..."
-open -a "Google Chrome" --args --app=http://localhost:8340
+nohup /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+    --app=http://localhost:8340 > /dev/null 2>&1 &
 echo "  → Chrome app mode opened"
 
 # 3. Open configured apps
