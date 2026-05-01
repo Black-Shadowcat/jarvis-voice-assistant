@@ -68,7 +68,8 @@ nohup /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
     --autoplay-policy=no-user-gesture-required \
     --user-data-dir="$HOME/.jarvis-chrome-profile" \
     --window-size=959,579 \
-    --window-position=0,30 > /dev/null 2>&1 &
+    --window-position=0,30 \
+    --force-dark-mode > /dev/null 2>&1 &
 echo "  → Chrome app mode opened"
 
 # 3. Open configured apps
