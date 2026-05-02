@@ -23,6 +23,8 @@ def notify_jarvis():
             time.sleep(5)
 
 
+COOLDOWN = 120  # seconds — macOS logs multiple "Wake reason" lines per wake event
+
 proc = subprocess.Popen(
     ["log", "stream", "--predicate", 'eventMessage contains "Wake reason"', "--style", "compact"],
     stdout=subprocess.PIPE,
@@ -32,7 +34,12 @@ proc = subprocess.Popen(
 
 print("[wake-monitor] Überwache System-Wake-Events...", flush=True)
 
+last_wake = 0.0
 for line in proc.stdout:
     if "Wake reason" in line:
+        now = time.time()
+        if now - last_wake < COOLDOWN:
+            continue
+        last_wake = now
         print(f"[wake-monitor] Wake erkannt: {line.strip()}", flush=True)
         notify_jarvis()
