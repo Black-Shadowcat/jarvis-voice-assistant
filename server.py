@@ -828,7 +828,20 @@ async def serve_index():
 
 
 async def periodic_refresh():
-    """Refresh weather, tasks, mail and calendar every 30 minutes."""
+    """Refresh weather, tasks, mail and calendar every 30 minutes.
+    If the initial weather fetch failed (e.g. network not ready at boot),
+    retry every 60 seconds until it succeeds before settling into the
+    normal 30-minute cadence."""
+    # Retry loop: network may not be ready when launchd starts the server
+    if WEATHER_INFO is None:
+        print("[jarvis] Wetter nicht geladen — warte auf Netzwerk...", flush=True)
+        for attempt in range(20):  # max 20 min
+            await asyncio.sleep(60)
+            refresh_data()
+            if WEATHER_INFO is not None:
+                print(f"[jarvis] Wetter nach {attempt+1} min geladen: {WEATHER_INFO['temp']}°", flush=True)
+                break
+    # Normal 30-minute refresh
     while True:
         await asyncio.sleep(30 * 60)
         print("[jarvis] Periodic refresh...", flush=True)

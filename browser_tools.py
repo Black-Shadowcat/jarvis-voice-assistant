@@ -36,10 +36,7 @@ async def _get_browser():
 
     if _browser is None:
         _pw = await async_playwright().start()
-        _browser = await _pw.chromium.launch(
-            headless=False,
-            args=["--start-maximized"],
-        )
+        _browser = await _pw.chromium.launch(headless=True)
         _context = await _browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             no_viewport=True,
