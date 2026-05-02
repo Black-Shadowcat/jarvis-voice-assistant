@@ -283,11 +283,11 @@ def refresh_data():
     print(f"[jarvis] Mails: {len(MAIL_INFO)} ungelesen", flush=True)
     print(f"[jarvis] Kalender: {len(CALENDAR_INFO)} Termine (7 Tage)", flush=True)
 
-WEATHER_INFO = ""
+WEATHER_INFO = None
 TASKS_INFO = []
 MAIL_INFO = []
 CALENDAR_INFO = []
-refresh_data()
+# Data is loaded async in startup_and_refresh() — no blocking call at import time
 
 # Action parsing
 ACTION_PATTERN = re.compile(r'\[ACTION:(\w+)\]\s*(.*?)$', re.DOTALL | re.MULTILINE)
@@ -827,32 +827,51 @@ async def serve_index():
     return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "index.html"))
 
 
-async def periodic_refresh():
-    """Refresh weather, tasks, mail and calendar every 30 minutes.
-    If the initial weather fetch failed (e.g. network not ready at boot),
-    retry every 60 seconds until it succeeds before settling into the
-    normal 30-minute cadence."""
-    # Retry loop: network may not be ready when launchd starts the server
+async def startup_and_refresh():
+    """Load all startup data async without blocking the server, retry weather if network not ready,
+    then refresh every 30 minutes."""
+    global WEATHER_INFO, TASKS_INFO, MAIL_INFO, CALENDAR_INFO
+    loop = asyncio.get_event_loop()
+
+    print("[jarvis] Startup: Lade Daten...", flush=True)
+
+    # Tasks, mail, calendar don't need external network — load immediately
+    TASKS_INFO = await loop.run_in_executor(None, get_tasks_sync)
+    MAIL_INFO = await loop.run_in_executor(None, get_mail_sync)
+    CALENDAR_INFO = await loop.run_in_executor(None, get_calendar_sync)
+    print(f"[jarvis] Tasks: {len(TASKS_INFO)} geladen", flush=True)
+    print(f"[jarvis] Mails: {len(MAIL_INFO)} ungelesen", flush=True)
+    print(f"[jarvis] Kalender: {len(CALENDAR_INFO)} Termine (7 Tage)", flush=True)
+
+    # Weather requires network — retry every 30s until ready (max 20 min)
+    WEATHER_INFO = await loop.run_in_executor(None, get_weather_sync)
     if WEATHER_INFO is None:
-        print("[jarvis] Wetter nicht geladen — warte auf Netzwerk...", flush=True)
-        for attempt in range(20):  # max 20 min
-            await asyncio.sleep(60)
-            refresh_data()
+        print("[jarvis] Wetter nicht verfügbar — starte Retry alle 30s...", flush=True)
+        for attempt in range(40):
+            await asyncio.sleep(30)
+            WEATHER_INFO = await loop.run_in_executor(None, get_weather_sync)
             if WEATHER_INFO is not None:
-                print(f"[jarvis] Wetter nach {attempt+1} min geladen: {WEATHER_INFO['temp']}°", flush=True)
+                print(f"[jarvis] Wetter nach {(attempt+1)*30}s geladen: {WEATHER_INFO['temp']}°", flush=True)
                 break
-    # Normal 30-minute refresh
+    else:
+        print(f"[jarvis] Wetter: {WEATHER_INFO}", flush=True)
+
+    # Normal 30-minute refresh loop
     while True:
         await asyncio.sleep(30 * 60)
         print("[jarvis] Periodic refresh...", flush=True)
-        refresh_data()
+        WEATHER_INFO = await loop.run_in_executor(None, get_weather_sync)
+        TASKS_INFO = await loop.run_in_executor(None, get_tasks_sync)
+        MAIL_INFO = await loop.run_in_executor(None, get_mail_sync)
+        CALENDAR_INFO = await loop.run_in_executor(None, get_calendar_sync)
+        print(f"[jarvis] Refresh done: Tasks={len(TASKS_INFO)}, Mails={len(MAIL_INFO)}, Kalender={len(CALENDAR_INFO)}", flush=True)
 
 
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app):
-    asyncio.create_task(periodic_refresh())
+    asyncio.create_task(startup_and_refresh())
     yield
 
 app.router.lifespan_context = lifespan
