@@ -15,5 +15,10 @@
   "spotify_track": "spotify:track:YOUR_TRACK_ID",
   "browser_url": "https://your-website.com",
   "obsidian_inbox_path": "/Users/YOUR_USERNAME/Documents/Obsidian/Inbox",
-  "apps": ["Mail", "Safari", "Visual Studio Code", "Music"]
+  "apps": ["Mail", "Safari", "Visual Studio Code", "Music"],
+  "window_layout": {
+    "top_right":    "Visual Studio Code",
+    "bottom_left":  "Mail",
+    "bottom_right": "Home Assistant"
+  }
 }

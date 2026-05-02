@@ -171,6 +171,11 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(42,108,184,0.2); border-radius: 2px; }
 
+        /* ── Window Layout Grid ── */
+        .layout-grid { background: rgba(42,108,184,0.25); }
+        .layout-cell { background: #0d1b2a; }
+        .layout-cell-fixed { background: #060f1c; }
+
         /* ── Light Mode ── */
         @media (prefers-color-scheme: light) {
             body { background: #f5f5f7; color: #1d1d1f; }
@@ -220,6 +225,10 @@
             }
 
             ::-webkit-scrollbar-thumb { background: rgba(42,108,184,0.15); }
+
+            .layout-grid { background: rgba(42,108,184,0.15); }
+            .layout-cell { background: #f4f7fc; }
+            .layout-cell-fixed { background: #e8eef8; }
         }
     </style>
 </head>
@@ -436,6 +445,50 @@
             </div>
         </div>
 
+        <!-- ── WINDOW LAYOUT ── -->
+        <div class="card rounded-2xl p-6 mb-8">
+            <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-1">Fenster-Anordnung</h2>
+            <p class="text-[0.7rem] text-j-muted mb-5">Entspricht den 4 Quadranten auf deinem Bildschirm. JARVIS ist immer oben links.</p>
+            <div class="layout-grid grid grid-cols-2 gap-[1px] rounded-xl overflow-hidden text-xs">
+
+                <!-- top-left: JARVIS (fest) -->
+                <div class="layout-cell-fixed flex items-center justify-center min-h-[80px]">
+                    <span class="font-semibold tracking-[0.2em] text-j-blue">JARVIS</span>
+                </div>
+
+                <!-- top-right -->
+                <div class="layout-cell flex items-center p-3 min-h-[80px]">
+                    <select x-model="cfg.window_layout.top_right" class="field text-xs">
+                        <option value="">— leer —</option>
+                        <template x-for="app in allApps" :key="app">
+                            <option :value="app" x-text="app"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- bottom-left -->
+                <div class="layout-cell flex items-center p-3 min-h-[80px]">
+                    <select x-model="cfg.window_layout.bottom_left" class="field text-xs">
+                        <option value="">— leer —</option>
+                        <template x-for="app in allApps" :key="app">
+                            <option :value="app" x-text="app"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- bottom-right -->
+                <div class="layout-cell flex items-center p-3 min-h-[80px]">
+                    <select x-model="cfg.window_layout.bottom_right" class="field text-xs">
+                        <option value="">— leer —</option>
+                        <template x-for="app in allApps" :key="app">
+                            <option :value="app" x-text="app"></option>
+                        </template>
+                    </select>
+                </div>
+
+            </div>
+        </div>
+
         <!-- ── FOOTER BUTTONS ── -->
         <div class="flex items-center justify-between">
             <a href="/" class="text-xs text-j-dim hover:text-j-muted transition-colors">← Zurück zu Jarvis</a>
@@ -474,6 +527,11 @@ function configApp() {
                 const r = await fetch('/api/config');
                 const data = await r.json();
                 if (data.ha_enabled === undefined) data.ha_enabled = !!(data.ha_url);
+                if (!data.window_layout) data.window_layout = {
+                    top_right: 'Visual Studio Code',
+                    bottom_left: 'Mail',
+                    bottom_right: 'Home Assistant'
+                };
                 this.cfg = data;
             } catch (e) {
                 this.showToast('error', 'Fehler beim Laden der Konfiguration');

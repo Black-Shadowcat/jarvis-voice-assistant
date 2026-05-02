@@ -154,33 +154,50 @@ fi
 # 4. Arrange windows in 4 equal quadrants
 echo "[4/5] Arranging windows..."
 sleep 5
-osascript << 'APPLESCRIPT'
--- VS Code → top right
-tell application "System Events" to tell process "Code"
-    set size of front window to {959, 579}
-    set position of front window to {961, 30}
-end tell
+/opt/homebrew/bin/python3.11 - <<'PYEOF'
+import json, subprocess, sys
 
--- Mail → bottom left
-tell application "Mail" to activate
-delay 0.3
-tell application "System Events" to tell process "Mail"
-    set size of front window to {959, 580}
-    set position of front window to {0, 611}
-end tell
+try:
+    with open("config.json") as f:
+        cfg = json.load(f)
+except Exception as e:
+    print(f"  Config lesen fehlgeschlagen: {e}", file=sys.stderr)
+    sys.exit(0)
 
--- Home Assistant → bottom right
-try
-    tell application "Home Assistant" to activate
+layout = cfg.get("window_layout", {
+    "top_right":    "Visual Studio Code",
+    "bottom_left":  "Mail",
+    "bottom_right": "Home Assistant",
+})
+
+# AppleScript process name differs from app name for some apps
+PROC = {
+    "Visual Studio Code": "Code",
+}
+
+SLOTS = {
+    "top_right":    (961, 30,  959, 579),
+    "bottom_left":  (0,   611, 959, 580),
+    "bottom_right": (961, 611, 959, 580),
+}
+
+parts = []
+for slot, (x, y, w, h) in SLOTS.items():
+    app = layout.get(slot, "")
+    if not app:
+        continue
+    proc = PROC.get(app, app)
+    parts.append(f"""try
+    tell application "{app}" to activate
     delay 0.3
-    tell application "System Events" to tell process "Home Assistant"
-        set size of front window to {959, 580}
-        set position of front window to {961, 611}
+    tell application "System Events" to tell process "{proc}"
+        set size of front window to {{{w}, {h}}}
+        set position of front window to {{{x}, {y}}}
     end tell
-end try
+end try""")
 
--- JARVIS Chrome → top left (bring to front)
-delay 0.5
+# JARVIS Chrome always top-left, bring to front last
+parts.append("""delay 0.5
 try
     tell application "System Events"
         set jarvisProcs to (every process whose name is "Google Chrome" and (exists window 1))
@@ -190,8 +207,12 @@ try
             end try
         end repeat
     end tell
-end try
-APPLESCRIPT
+end try""")
+
+r = subprocess.run(["osascript"], input="\n".join(parts), text=True, capture_output=True)
+if r.returncode != 0:
+    print(f"  AppleScript: {r.stderr[:200]}", file=sys.stderr)
+PYEOF
 echo "  → Windows arranged"
 
 # 5. Start mic mute menu bar button
