@@ -99,8 +99,9 @@ fi
 pkill -f "jarvis-chrome-profile" 2>/dev/null
 sleep 1
 
-# Launch Chrome — binary directly so flags work even when Chrome is already running
-nohup "$CHROME_BIN" \
+# Launch Chrome via macOS Launch Services — 'open' gives Chrome the correct
+# GUI bootstrap context that launchd-started processes don't inherit directly.
+open -na "Google Chrome" --args \
     --app=http://localhost:8340 \
     --autoplay-policy=no-user-gesture-required \
     --user-data-dir="$JARVIS_PROFILE" \
@@ -111,16 +112,15 @@ nohup "$CHROME_BIN" \
     --disable-restore-session-state \
     --no-default-browser-check \
     --disable-gpu \
-    --in-process-gpu > /tmp/jarvis-chrome.log 2>&1 &
-CHROME_PID=$!
-echo "  → Chrome launched (PID: $CHROME_PID)"
+    --in-process-gpu
+echo "  → Chrome gestartet via Launch Services"
 
-# Wait and verify Chrome is actually running — retry once if it died
-sleep 5
+# Wait 15s then verify — longer window since open is async and Chrome needs init time
+sleep 15
 if ! pgrep -f "jarvis-chrome-profile" > /dev/null 2>&1; then
-    echo "  → Chrome did not stay running — retrying..."
-    sleep 2
-    nohup "$CHROME_BIN" \
+    echo "  → Chrome nicht gestartet — retry..."
+    sleep 3
+    open -na "Google Chrome" --args \
         --app=http://localhost:8340 \
         --autoplay-policy=no-user-gesture-required \
         --user-data-dir="$JARVIS_PROFILE" \
@@ -131,11 +131,11 @@ if ! pgrep -f "jarvis-chrome-profile" > /dev/null 2>&1; then
         --disable-restore-session-state \
         --no-default-browser-check \
         --disable-gpu \
-        --in-process-gpu > /tmp/jarvis-chrome.log 2>&1 &
-    echo "  → Chrome retry launched (PID: $!)"
-    sleep 4
+        --in-process-gpu
+    echo "  → Chrome retry gestartet"
+    sleep 5
 else
-    echo "  → Chrome running OK"
+    echo "  → Chrome läuft"
 fi
 
 # 3. Open configured apps
