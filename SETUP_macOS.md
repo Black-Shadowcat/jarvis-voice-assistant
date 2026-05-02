@@ -9,6 +9,8 @@ Dein persönlicher KI-Assistent — optimiert für macOS.
 - JARVIS steuert deinen Browser (suchen, Seiten öffnen)
 - JARVIS sieht deinen Bildschirm und beschreibt ihn
 - JARVIS schaltet Lichter via Home Assistant
+- JARVIS schreibt Notizen direkt in deine Obsidian Inbox
+- Automatischer Dark/Light Mode passend zur macOS-Systemeinstellung
 - Mic-Mute-Button in der macOS Menüleiste
 - **Config UI** im Browser — alle Einstellungen ohne Texteditor
 
@@ -74,8 +76,13 @@ Bearbeite `config.json` mit deinen Daten. Alle verfügbaren Felder:
   "workspace_path": "/Users/matthias/jarvis-voice-assistant",
   "spotify_track": "spotify:track:...",
   "browser_url": "https://your-website.com",
-  "obsidian_inbox_path": "/Users/matthias/Documents/Obsidian/Inbox",
-  "apps": ["Mail", "Safari", "Visual Studio Code", "Music"]
+  "obsidian_inbox_path": "/Users/matthias/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vault/01 Inbox/Jarvis",
+  "apps": ["Mail", "Visual Studio Code", "Home Assistant"],
+  "window_layout": {
+    "top_right":    "Visual Studio Code",
+    "bottom_left":  "Mail",
+    "bottom_right": "Home Assistant"
+  }
 }
 ```
 
@@ -95,8 +102,9 @@ Bearbeite `config.json` mit deinen Daten. Alle verfügbaren Felder:
 | `workspace_path` | ✅ | Absoluter Pfad zum Projektordner |
 | `spotify_track` | ⚡ | Spotify Track URI beim Start |
 | `browser_url` | ⚡ | Start-URL im Browser |
-| `obsidian_inbox_path` | ⚡ | Pfad zur Obsidian Inbox |
+| `obsidian_inbox_path` | ⚡ | Pfad zum Jarvis-Ordner in der Obsidian Inbox |
 | `apps` | ✅ | Apps die beim Start geöffnet werden |
+| `window_layout` | ⚡ | Fenster-Anordnung der 3 konfigurierbaren Quadranten |
 
 ✅ = Erforderlich &nbsp; ⚡ = Optional
 
@@ -119,24 +127,43 @@ Die Config UI bietet:
 - **Voice-Dropdown** — alle verfügbaren ElevenLabs Voices auswählen
 - **Voice Preview** — neue Stimme direkt anhören
 - **Home Assistant Toggle** — HA-Integration ein-/ausschalten
+- **Fenster-Anordnung** — visuelles 2×2 Raster, Quadranten per Dropdown zuweisen
 - **Alle Felder** strukturiert in Karten mit Labels
-- **Sofort wirksam** — nach Speichern keine Server-Neustart nötig
+- **Sofort wirksam** — nach Speichern kein Server-Neustart nötig
 
 > API Keys werden als Passwortfelder dargestellt (👁 zum Anzeigen). Änderungen werden direkt in `config.json` gespeichert und im laufenden Server übernommen.
 
 ---
 
+## Dark / Light Mode
+
+JARVIS passt sich automatisch der macOS-Systemeinstellung an — kein manuelles Umschalten nötig. Sowohl die Haupt-UI als auch die Config UI reagieren live wenn macOS zwischen Hell und Dunkel wechselt (z.B. im Auto-Modus).
+
+---
+
+## Obsidian Integration
+
+JARVIS kann Notizen direkt in deine Obsidian Inbox schreiben:
+
+1. Erstelle einen Ordner in deiner Vault (z.B. `01 Inbox/Jarvis/`)
+2. Trage den Pfad als `obsidian_inbox_path` in der Config UI ein
+3. Sprich: *„Jarvis, notiere: ..."* oder *„Merke dir: ..."*
+
+JARVIS erstellt eine `.md` Datei mit Zeitstempel als Dateiname. Obsidian zeigt die Notiz sofort in der Inbox an.
+
+---
+
 ## Starten
 
-### Option A: Sofort-Start
+### Option A: Hotkey (empfohlen im Alltag)
 
-```bash
-python3.11 scripts/keyboard-trigger-macos.py
+```
+Cmd + Shift + J
 ```
 
-Startet Server, öffnet JARVIS im Chrome App-Modus und alle konfigurierten Apps.
+Startet Server, öffnet JARVIS im Chrome App-Modus, alle Apps und arrangiert Fenster.
 
-### Option B: Launch Script (empfohlen)
+### Option B: Launch Script
 
 ```bash
 ./scripts/launch-session.sh
@@ -144,9 +171,8 @@ Startet Server, öffnet JARVIS im Chrome App-Modus und alle konfigurierten Apps.
 
 Vollständiger Start mit:
 - FastAPI Server
-- Chrome im App-Modus (kein Tab-/Adressleiste)
-- Konfigurierte Apps
-- Window-Arrangement (4 Quadranten)
+- Chrome im App-Modus (via macOS Launch Services, kein Tab/Adressleiste)
+- Konfigurierte Apps in konfigurierten Quadranten
 - Mic-Mute-Button in der Menüleiste
 
 ### Option C: Nur Server
@@ -186,43 +212,24 @@ python3.11 scripts/mic-mute-menubar.py
 
 ---
 
-## Launchd Auto-Start (Optional)
+## Launchd Auto-Start
 
-JARVIS automatisch bei macOS-Login starten:
+JARVIS startet automatisch bei macOS-Login über zwei launchd-Jobs:
 
-**1. Plist erstellen** (`~/Library/LaunchAgents/com.jarvis.launcher.plist`):
+| Plist | Funktion |
+|---|---|
+| `com.jarvis.server.plist` | Server (KeepAlive — startet bei Absturz neu) |
+| `com.jarvis.session.plist` | Session: Chrome + Apps + Fenster (einmalig bei Login) |
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.jarvis.launcher</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/opt/homebrew/bin/python3.11</string>
-        <string>/Users/DEIN_USERNAME/jarvis-voice-assistant/scripts/keyboard-trigger-macos.py</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/tmp/jarvis-launchd.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/jarvis-launchd-err.log</string>
-</dict>
-</plist>
-```
-
-> Ersetze `DEIN_USERNAME` mit deinem macOS-Benutzernamen (`whoami`).
-
-**2. Aktivieren:**
+Die Session-Plist wartet auf Dock+Finder und schläft 20s — erst dann startet Chrome, damit der GPU-Stack vollständig bereit ist.
 
 ```bash
-launchctl load ~/Library/LaunchAgents/com.jarvis.launcher.plist
+# Status prüfen
+launchctl list | grep jarvis
 
-# Deaktivieren:
-launchctl unload ~/Library/LaunchAgents/com.jarvis.launcher.plist
+# Neu laden (nach Änderung der Plist)
+launchctl unload ~/Library/LaunchAgents/com.jarvis.session.plist
+launchctl load   ~/Library/LaunchAgents/com.jarvis.session.plist
 ```
 
 ---
@@ -232,21 +239,20 @@ launchctl unload ~/Library/LaunchAgents/com.jarvis.launcher.plist
 ### Server startet nicht / Port belegt
 
 ```bash
-# Prüfen welcher Prozess Port 8340 belegt
 lsof -i :8340
-
-# Prozess beenden
 kill <PID>
-
-# Server manuell starten
 python3.11 server.py
 ```
 
-### "keyboard" Module Fehler
+### Chrome öffnet sich nicht beim Autostart
 
+Der Session-Job wartet auf Dock+Finder. Falls Chrome trotzdem nicht startet:
 ```bash
-pip3.11 install keyboard
-# Eventuell Accessibility-Berechtigung erforderlich (siehe oben)
+# Session manuell auslösen
+./scripts/launch-session.sh
+
+# Chrome-Log prüfen
+cat /tmp/jarvis-chrome.log
 ```
 
 ### `rumps` nicht gefunden (Mic-Mute Button)
@@ -258,30 +264,24 @@ pip3.11 install rumps
 ### Config UI nicht erreichbar
 
 ```bash
-# Server läuft?
-curl http://localhost:8340
-# → Gibt HTML zurück wenn OK
-
-# Config UI direkt
+curl http://localhost:8340   # → HTML wenn OK
 open http://localhost:8340/config
 ```
 
+### Obsidian Notiz wird nicht erstellt
+
+1. `obsidian_inbox_path` in Config UI prüfen — muss absoluter Pfad sein
+2. Prüfen ob der Ordner existiert: `ls "<pfad>"`
+3. Server-Log: `tail -f /tmp/jarvis-server.log`
+
 ### Voice Preview funktioniert nicht
 
-Prüfe den ElevenLabs API Key in der Config UI (Test-Button). Stelle sicher, dass `elevenlabs_voice_id` gesetzt ist.
-
-### Browser öffnet nicht im App-Modus
-
-```bash
-# Chrome-Pfad prüfen
-ls /Applications/Google\ Chrome.app/Contents/MacOS/
-```
+Prüfe den ElevenLabs API Key in der Config UI (Test-Button).
 
 ### Screen Capture funktioniert nicht
 
 ```
-System Settings → Privacy & Security → Screen Recording
-→ Terminal hinzufügen → Neustart der App
+System Settings → Privacy & Security → Screen Recording → Terminal hinzufügen
 ```
 
 ### Home Assistant antwortet nicht
@@ -299,17 +299,34 @@ jarvis-voice-assistant/
 ├── screen_capture.py            # Screenshot + Claude Vision
 ├── requirements.txt             # Python Dependencies
 ├── config.json                  # Deine Config (gitignored)
-├── config.example.json          # Template
+├── config.example.json          # Template mit allen Feldern
 ├── frontend/
 │   ├── index.html               # JARVIS Haupt-UI (Orb)
 │   ├── config.html              # Config UI (http://localhost:8340/config)
 │   ├── main.js                  # Speech Recognition + WebSocket
-│   └── style.css                # Dark Theme
+│   └── style.css                # Dark/Light Theme (CSS custom properties)
 └── scripts/
-    ├── launch-session.sh        # Vollständiger Start (empfohlen)
-    ├── keyboard-trigger-macos.py # Sofort-Start Script
+    ├── launch-session.sh        # Vollständiger Start
     └── mic-mute-menubar.py      # Menüleisten Mic-Mute Button
 ```
+
+---
+
+## Alle Sprach-Actions
+
+| Action | Trigger-Beispiele | Beschreibung |
+|---|---|---|
+| `SEARCH` | „Suche nach...", „Was ist..." | DuckDuckGo + Seite lesen |
+| `OPEN` | „Öffne...", „Geh zu..." | URL im Browser öffnen |
+| `SCREEN` | „Was siehst du?", „Schau auf..." | Bildschirm analysieren |
+| `NEWS` | „Aktuelle Nachrichten" | Weltnachrichten laden |
+| `REMINDER_ADD` | „Erinnere mich...", „Füge hinzu..." | Apple Reminders Inbox |
+| `REMINDER_DONE` | „Erledigt: ...", „Abhaken..." | Reminder abhaken |
+| `TASKS_LIST` | „Was steht an?", „Aufgaben?" | Reminders live laden |
+| `MAIL_READ` | „Meine Mails", „Mail von..." | Ungelesene Mails / Inhalt |
+| `KALENDER` | „Termine heute/diese Woche" | Kalender via Home Assistant |
+| `LICHT` | „Licht an", „Wohnzimmer 50%" | Home Assistant Lichter |
+| `NOTIZ` | „Notiere...", „Merke dir..." | Markdown-Datei in Obsidian Inbox |
 
 ---
 
@@ -332,17 +349,17 @@ python3.11 server.py
 # Config UI öffnen
 open http://localhost:8340/config
 
-# Session starten (empfohlen)
+# Session starten
 ./scripts/launch-session.sh
-
-# Keyboard Trigger
-python3.11 scripts/keyboard-trigger-macos.py
 
 # Mic-Mute Menüleiste
 python3.11 scripts/mic-mute-menubar.py
 
 # Server-Logs prüfen
 tail -f /tmp/jarvis-server.log
+
+# Server neu starten (nach Code-Änderungen)
+pkill -f "server.py"   # launchd KeepAlive startet ihn automatisch neu
 ```
 
 ---
@@ -350,8 +367,8 @@ tail -f /tmp/jarvis-server.log
 ## Support
 
 Bei Problemen:
-1. Config UI aufrufen: `http://localhost:8340/config` — API Keys testen
-2. Server-Log prüfen: `tail -f /tmp/jarvis-server.log`
+1. Config UI: `http://localhost:8340/config` — API Keys testen
+2. Server-Log: `tail -f /tmp/jarvis-server.log`
 3. `config.json` prüfen (keine Kommas am Ende!)
-4. Python-Pfad prüfen: `/opt/homebrew/bin/python3.11`
-5. macOS-Berechtigungen prüfen (Accessibility, Screen Recording)
+4. Python-Pfad: `/opt/homebrew/bin/python3.11`
+5. macOS-Berechtigungen: Accessibility, Screen Recording
