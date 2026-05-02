@@ -120,6 +120,22 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition;
 let isListening = false;
 
+// Korrektur bekannter Fehlerkennungen der Web Speech API
+const SPEECH_CORRECTIONS = {
+    'ob sie dir': 'Obsidian',
+    'ob si dir': 'Obsidian',
+    'ob sie di': 'Obsidian',
+    'obsidian': 'Obsidian',
+};
+
+function correctTranscript(text) {
+    let t = text;
+    for (const [wrong, right] of Object.entries(SPEECH_CORRECTIONS)) {
+        t = t.replace(new RegExp(wrong, 'gi'), right);
+    }
+    return t;
+}
+
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.lang = 'de-DE';
@@ -129,7 +145,7 @@ if (SpeechRecognition) {
     recognition.onresult = (event) => {
         const last = event.results[event.results.length - 1];
         if (last.isFinal) {
-            const text = last[0].transcript.trim();
+            const text = correctTranscript(last[0].transcript.trim());
             if (text) {
                 addTranscript('user', text);
                 setOrbState('thinking');

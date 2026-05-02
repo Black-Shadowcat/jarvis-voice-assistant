@@ -339,6 +339,8 @@ AKTIONEN - Schreibe die passende Aktion ans ENDE deiner Antwort. Der Text VOR de
 [ACTION:KALENDER] zeitraum - Kalendertermine live abrufen. Zeitraum: "heute" (1 Tag), "morgen" (2 Tage), "woche" (7 Tage, Standard), "monat" (30 Tage), "60tage" (60 Tage), oder eine Zahl 1-60. Nutze diese Aktion IMMER wenn Sir nach Terminen fragt. Für Fragen wie "was ist am 1. Mai" nutze "woche" oder "monat" je nach Datum. Zeige nur den Titel und das Datum — nenne KEINEN Kalender-Namen, der in eckigen Klammern stehen könnte.
 [ACTION:LICHT] raum befehl - Licht per Home Assistant steuern. Raeume: alle, wohnzimmer, kueche, buero, flur, schlafzimmer, balkon, nachtschrank, sideboard, iris. Befehle: "an", "aus", oder Prozentzahl fuer Helligkeit (z.B. "50"). Beispiele: "wohnzimmer an", "alles aus", "buero 50". Nutze diese Aktion IMMER wenn Sir Licht ein- oder ausschalten oder dimmen moechte.
 [ACTION:NOTIZ] text - Notiz in Obsidian Inbox speichern. Nutze diese Aktion wenn Sir etwas notieren, aufschreiben oder in Obsidian speichern moechte. Der gesamte Notiztext kommt nach dem Tag. Beispiel: "[ACTION:NOTIZ] Idee fuer das Projekt: neues Dashboard mit Echtzeit-Daten"
+[ACTION:NOTIZ_LIST] - Alle Notizen in der Obsidian Inbox auflisten und vorlesen. Nutze diese Aktion IMMER wenn Sir fragt welche Notizen, Erinnerungen oder Aufzeichnungen in Obsidian sind.
+[ACTION:NOTIZ_ERLEDIGT] stichwort - Notiz(en) aus der Obsidian Inbox als erledigt markieren (loeschen). Nutze "alle" um alle Notizen zu loeschen. Nutze diese Aktion IMMER wenn Sir Obsidian-Notizen als erledigt, abgehakt oder fertig markieren moechte — NIEMALS REMINDER_DONE dafuer verwenden.
 
 WENN {USER_NAME} "Jarvis activate" sagt:
 - Begruesse ihn passend zur Tageszeit (aktuelle Zeit: {{time}}).
@@ -514,17 +516,25 @@ end tell'''
     elif t == "REMINDER_DONE":
         keyword = p.replace('"', '').replace("'", "").strip()
         script = f'''tell application "Reminders"
-    repeat with r in (every reminder whose completed is false)
-        if name of r contains "{keyword}" then
-            set completed of r to true
-        end if
+    set marked to 0
+    repeat with aList in every list
+        repeat with r in (every reminder in aList whose completed is false)
+            if name of r contains "{keyword}" then
+                set completed of r to true
+                set marked to marked + 1
+            end if
+        end repeat
     end repeat
+    return marked
 end tell'''
         result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=30)
         if result.returncode == 0:
-            TASKS_INFO = get_tasks_sync()
-            return f"Erinnerung abgehakt: {keyword}"
-        return "Fehler beim Abhaken der Erinnerung"
+            count = result.stdout.strip()
+            if count and int(count) > 0:
+                TASKS_INFO = get_tasks_sync()
+                return f"Erinnerung abgehakt: {keyword}"
+            return f"Keine Erinnerung mit '{keyword}' gefunden. Bitte genaueres Stichwort aus dem Titel nennen."
+        return f"Fehler beim Abhaken der Erinnerung: {result.stderr.strip()}"
 
     elif t == "LICHT":
         if not HA_URL or not HA_TOKEN:
@@ -597,6 +607,54 @@ end tell'''
             return f"Notiz gespeichert: {text}"
         except Exception as e:
             return f"Fehler beim Speichern der Notiz: {e}"
+
+    elif t == "NOTIZ_LIST":
+        if not OBSIDIAN_INBOX:
+            return "Obsidian Inbox Pfad nicht konfiguriert."
+        try:
+            import os
+            files = sorted([
+                f for f in os.listdir(OBSIDIAN_INBOX)
+                if f.endswith(".md")
+            ])
+            if not files:
+                return "Die Obsidian Inbox ist leer."
+            notes = []
+            for fname in files:
+                fpath = os.path.join(OBSIDIAN_INBOX, fname)
+                with open(fpath, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                notes.append(f"- {content}")
+            return f"Obsidian Inbox ({len(files)} Notiz{'en' if len(files) != 1 else ''}):\n" + "\n".join(notes)
+        except Exception as e:
+            return f"Fehler beim Lesen der Obsidian Inbox: {e}"
+
+    elif t == "NOTIZ_ERLEDIGT":
+        if not OBSIDIAN_INBOX:
+            return "Obsidian Inbox Pfad nicht konfiguriert."
+        try:
+            import os
+            keyword = p.strip().lower()
+            files = [f for f in os.listdir(OBSIDIAN_INBOX) if f.endswith(".md")]
+            if not files:
+                return "Die Obsidian Inbox ist bereits leer."
+            deleted = []
+            for fname in files:
+                fpath = os.path.join(OBSIDIAN_INBOX, fname)
+                if keyword == "alle":
+                    os.remove(fpath)
+                    deleted.append(fname)
+                else:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    if keyword in content.lower():
+                        os.remove(fpath)
+                        deleted.append(fname)
+            if not deleted:
+                return f"Keine Notiz mit '{p.strip()}' gefunden."
+            return f"{len(deleted)} Notiz{'en' if len(deleted) != 1 else ''} als erledigt markiert."
+        except Exception as e:
+            return f"Fehler beim Loeschen der Notiz: {e}"
 
     return ""
 
@@ -726,7 +784,7 @@ async def save_config_api(request: Request):
         "user_name", "user_address", "city", "lat", "lon",
         "kachelmann_api_key", "ha_url", "ha_token", "ha_enabled",
         "workspace_path", "obsidian_inbox_path", "browser_url",
-        "spotify_track_uri", "apps",
+        "spotify_track_uri", "apps", "window_layout",
     ]
     for field in allowed:
         if field in data:
