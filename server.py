@@ -33,7 +33,7 @@ CITY = config.get("city", "Hamburg")
 LAT = config.get("lat", 53.55)
 LON = config.get("lon", 10.00)
 KACHELMANN_KEY = config.get("kachelmann_api_key", "")
-TASKS_FILE = config.get("obsidian_inbox_path", "")
+OBSIDIAN_INBOX = config.get("obsidian_inbox_path", "")
 HA_URL = config.get("ha_url", "").rstrip("/")
 HA_TOKEN = config.get("ha_token", "")
 
@@ -338,6 +338,7 @@ AKTIONEN - Schreibe die passende Aktion ans ENDE deiner Antwort. Der Text VOR de
 [ACTION:MAIL_READ] stichwort - Mails lesen. Ohne Stichwort: alle Ungelesenen auflisten. Mit Stichwort (z.B. Absendername): Inhalt der passenden Mail vorlesen.
 [ACTION:KALENDER] zeitraum - Kalendertermine live abrufen. Zeitraum: "heute" (1 Tag), "morgen" (2 Tage), "woche" (7 Tage, Standard), "monat" (30 Tage), "60tage" (60 Tage), oder eine Zahl 1-60. Nutze diese Aktion IMMER wenn Sir nach Terminen fragt. Für Fragen wie "was ist am 1. Mai" nutze "woche" oder "monat" je nach Datum. Zeige nur den Titel und das Datum — nenne KEINEN Kalender-Namen, der in eckigen Klammern stehen könnte.
 [ACTION:LICHT] raum befehl - Licht per Home Assistant steuern. Raeume: alle, wohnzimmer, kueche, buero, flur, schlafzimmer, balkon, nachtschrank, sideboard, iris. Befehle: "an", "aus", oder Prozentzahl fuer Helligkeit (z.B. "50"). Beispiele: "wohnzimmer an", "alles aus", "buero 50". Nutze diese Aktion IMMER wenn Sir Licht ein- oder ausschalten oder dimmen moechte.
+[ACTION:NOTIZ] text - Notiz in Obsidian Inbox speichern. Nutze diese Aktion wenn Sir etwas notieren, aufschreiben oder in Obsidian speichern moechte. Der gesamte Notiztext kommt nach dem Tag. Beispiel: "[ACTION:NOTIZ] Idee fuer das Projekt: neues Dashboard mit Echtzeit-Daten"
 
 WENN {USER_NAME} "Jarvis activate" sagt:
 - Begruesse ihn passend zur Tageszeit (aktuelle Zeit: {{time}}).
@@ -576,6 +577,26 @@ end tell'''
         elif brightness is not None:
             return f"{room_label} auf {brightness}% gedimmt."
         return f"{room_label} eingeschaltet."
+
+    elif t == "NOTIZ":
+        text = p.strip()
+        if not text:
+            return "Kein Notiztext angegeben."
+        if not OBSIDIAN_INBOX:
+            return "Obsidian Inbox Pfad nicht konfiguriert."
+        try:
+            import os
+            from datetime import datetime
+            os.makedirs(OBSIDIAN_INBOX, exist_ok=True)
+            ts = datetime.now()
+            filename = ts.strftime("%Y-%m-%d %H-%M-%S") + " Jarvis.md"
+            filepath = os.path.join(OBSIDIAN_INBOX, filename)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(text + "\n")
+            print(f"[jarvis] Notiz gespeichert: {filepath}", flush=True)
+            return f"Notiz gespeichert: {text}"
+        except Exception as e:
+            return f"Fehler beim Speichern der Notiz: {e}"
 
     return ""
 
