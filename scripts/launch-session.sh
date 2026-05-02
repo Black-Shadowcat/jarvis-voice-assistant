@@ -107,7 +107,6 @@ open -na "Google Chrome" --args \
     --user-data-dir="$JARVIS_PROFILE" \
     --window-size=959,579 \
     --window-position=0,30 \
-    --force-dark-mode \
     --no-first-run \
     --disable-restore-session-state \
     --no-default-browser-check \
@@ -126,8 +125,7 @@ if ! pgrep -f "jarvis-chrome-profile" > /dev/null 2>&1; then
         --user-data-dir="$JARVIS_PROFILE" \
         --window-size=959,579 \
         --window-position=0,30 \
-        --force-dark-mode \
-        --no-first-run \
+            --no-first-run \
         --disable-restore-session-state \
         --no-default-browser-check \
         --disable-gpu \
