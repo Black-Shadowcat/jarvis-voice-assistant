@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#0a0a0f">
+    <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+    <meta name="color-scheme" content="dark light">
     <title>J.A.R.V.I.S. — Config</title>
 
     <script>
@@ -168,6 +170,57 @@
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(42,108,184,0.2); border-radius: 2px; }
+
+        /* ── Light Mode ── */
+        @media (prefers-color-scheme: light) {
+            body { background: #f5f5f7; color: #1d1d1f; }
+
+            /* Tailwind custom-color overrides */
+            .text-j-text  { color: #1d1d1f !important; }
+            .text-j-muted { color: #6e6e73 !important; }
+            .text-j-dim   { color: #8e8e93 !important; }
+
+            .card {
+                background: linear-gradient(145deg, #ffffff 0%, #f4f6f9 100%);
+                border-color: rgba(42,108,184,0.15);
+                box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+            }
+
+            .field {
+                background: #ffffff;
+                border-color: rgba(42,108,184,0.28);
+                color: #1d1d1f;
+            }
+            .field:focus { box-shadow: 0 0 0 3px rgba(42,108,184,0.1); }
+            .field::placeholder { color: #b0b0b8; }
+            select.field option { background: #ffffff; }
+
+            .label { color: #6e6e73; }
+
+            .btn-test { color: #6e6e73; }
+            .btn-test:hover:not(:disabled) { color: #0055b3; }
+            .btn-reset { color: #6e6e73; }
+            .btn-reset:hover { color: #0055b3; }
+
+            .app-chip { color: #888; }
+            .app-chip:hover { color: #555; }
+            .app-chip.active { color: #1d1d1f; }
+
+            .toggle-track { background: #d1d5db; border-color: #c0c4cb; }
+            .toggle-track.on { background: #2a6cb8; border-color: #2a6cb8; }
+            .toggle-thumb { background: #ffffff; }
+
+            .eye-btn { color: #aaa; }
+            .eye-btn:hover { color: #6e6e73; }
+
+            .toast {
+                background: #ffffff;
+                color: #1d1d1f;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            }
+
+            ::-webkit-scrollbar-thumb { background: rgba(42,108,184,0.15); }
+        }
     </style>
 </head>
 <body class="text-j-text min-h-screen">
