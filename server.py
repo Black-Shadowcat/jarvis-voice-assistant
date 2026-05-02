@@ -784,17 +784,18 @@ async def test_elevenlabs_key(request: Request):
     api_key = data.get("api_key", "")
     if not api_key:
         return {"valid": False, "message": "Kein API Key angegeben"}
+    # Validate via a minimal TTS request — /v1/user is restricted on Starter plans
     try:
-        resp = await http.get(
-            "https://api.elevenlabs.io/v1/user",
-            headers={"xi-api-key": api_key},
+        resp = await http.post(
+            "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+            headers={"xi-api-key": api_key, "Content-Type": "application/json"},
+            json={"text": "x", "model_id": "eleven_multilingual_v2", "output_format": "mp3_22050_32"},
         )
         if resp.status_code == 200:
-            sub = resp.json().get("subscription", {})
-            used = sub.get("character_count", 0)
-            limit = sub.get("character_limit", 0)
-            return {"valid": True, "message": f"API Key gültig ✓  —  {used:,} / {limit:,} Zeichen"}
-        return {"valid": False, "message": f"Ungültiger API Key (HTTP {resp.status_code})"}
+            return {"valid": True, "message": "API Key gültig ✓"}
+        if resp.status_code == 401:
+            return {"valid": False, "message": "Ungültiger API Key"}
+        return {"valid": False, "message": f"Fehler HTTP {resp.status_code}"}
     except Exception as e:
         return {"valid": False, "message": f"Verbindungsfehler: {str(e)[:100]}"}
 
@@ -812,13 +813,15 @@ async def get_elevenlabs_voices():
                     "id": v["voice_id"],
                     "name": v["name"],
                     "language": v.get("labels", {}).get("language", ""),
-                    "accent": v.get("labels", {}).get("accent", ""),
                 }
                 for v in resp.json().get("voices", [])
             ]
             return sorted(voices, key=lambda x: x["name"])
     except Exception:
         pass
+    # Starter plan may not allow /v1/voices — return current voice as fallback
+    if ELEVENLABS_VOICE_ID:
+        return [{"id": ELEVENLABS_VOICE_ID, "name": "Aktuelle Voice", "language": ""}]
     return []
 
 
