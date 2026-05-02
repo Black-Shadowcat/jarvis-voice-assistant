@@ -2,8 +2,14 @@
 # JARVIS — Launch Session (macOS)
 # Starts FastAPI server, browser, and configured apps
 
-# Give the desktop/windowserver time to fully initialize when launched at login
-sleep 12
+# Wait until macOS is truly ready — Dock + Finder running = UI fully initialised.
+# A fixed sleep is unreliable; GPU/WindowServer may not be ready even after 12s.
+echo "[boot] Waiting for macOS to be fully ready..."
+until pgrep -x "Dock" > /dev/null 2>&1 && pgrep -x "Finder" > /dev/null 2>&1; do
+    sleep 3
+done
+echo "[boot] Dock + Finder up — waiting 20s for GPU/display stack..."
+sleep 20
 
 # Get the directory where this script is located
 SCRIPT_DIR="${0:A:h}"
