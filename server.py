@@ -287,12 +287,28 @@ WEATHER_INFO = None
 TASKS_INFO = []
 MAIL_INFO = []
 CALENDAR_INFO = []
+OBSIDIAN_INFO: list[str] = []
 # Data is loaded async in startup_and_refresh() — no blocking call at import time
 
 # Action parsing
 ACTION_PATTERN = re.compile(r'\[ACTION:(\w+)\]\s*(.*?)$', re.DOTALL | re.MULTILINE)
 
 conversations: dict[str, list] = {}
+active_connections: set = set()
+
+
+def get_obsidian_info_sync() -> list[str]:
+    if not OBSIDIAN_INBOX:
+        return []
+    try:
+        files = sorted(f for f in os.listdir(OBSIDIAN_INBOX) if f.endswith(".md"))
+        notes = []
+        for fname in files:
+            with open(os.path.join(OBSIDIAN_INBOX, fname), "r", encoding="utf-8") as f:
+                notes.append(f.read().strip())
+        return notes
+    except Exception:
+        return []
 
 def build_system_prompt():
     weather_block = ""
@@ -306,6 +322,11 @@ def build_system_prompt():
     task_block = ""
     if TASKS_INFO:
         task_block = f"\nOffene Aufgaben ({len(TASKS_INFO)}): " + ", ".join(TASKS_INFO[:5])
+
+    obsidian_block = ""
+    if OBSIDIAN_INFO:
+        previews = [n[:70] + ("..." if len(n) > 70 else "") for n in OBSIDIAN_INFO]
+        obsidian_block = f"\nOffene Obsidian-Notizen ({len(OBSIDIAN_INFO)}): " + " | ".join(previews)
 
     mail_block = ""
     if MAIL_INFO:
@@ -348,9 +369,10 @@ WENN {USER_NAME} "Jarvis activate" sagt:
 - Fasse die Aufgaben kurz als Ueberblick in einem Satz zusammen, ohne dabei jede einzelne Aufgabe einfach vorzulesen. Gebe gerne einen humorvollen Kommentar am Ende an.
 - Erwaehne kurz die Anzahl ungelesener Mails. Wenn keine: lass es weg.
 - Erwaehne kurz anstehende Termine heute oder morgen, falls vorhanden.
+- Weise kurz auf offene Obsidian-Notizen hin, falls vorhanden.
 - Sei kreativ bei der Begruessung.
 
-=== AKTUELLE DATEN ==={weather_block}{task_block}{mail_block}{cal_block}
+=== AKTUELLE DATEN ==={weather_block}{task_block}{obsidian_block}{mail_block}{cal_block}
 ==="""
 
 
@@ -599,7 +621,9 @@ end tell'''
             from datetime import datetime
             os.makedirs(OBSIDIAN_INBOX, exist_ok=True)
             ts = datetime.now()
-            filename = ts.strftime("%Y-%m-%d %H-%M-%S") + " Jarvis.md"
+            slug = re.sub(r'[^\w\säöüÄÖÜß-]', '', text).strip()
+            slug = re.sub(r'\s+', ' ', slug)[:50].strip() or "Notiz"
+            filename = ts.strftime("%Y-%m-%d") + f" {slug}.md"
             filepath = os.path.join(OBSIDIAN_INBOX, filename)
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(text + "\n")
@@ -741,6 +765,7 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     session_id = str(id(ws))
+    active_connections.add(ws)
     print(f"[jarvis] Client connected", flush=True)
 
     try:
@@ -754,7 +779,24 @@ async def websocket_endpoint(ws: WebSocket):
             await process_message(session_id, user_text, ws)
 
     except WebSocketDisconnect:
+        active_connections.discard(ws)
         conversations.pop(session_id, None)
+
+
+@app.post("/api/wake")
+async def wake_notification():
+    """Called by wake-monitor.py when system wakes from sleep."""
+    global OBSIDIAN_INFO
+    OBSIDIAN_INFO = get_obsidian_info_sync()
+    print(f"[jarvis] Wake: {len(OBSIDIAN_INFO)} Obsidian-Notizen", flush=True)
+    if OBSIDIAN_INFO and active_connections:
+        prompt = f"Jarvis activate wake — weise kurz auf {len(OBSIDIAN_INFO)} offene Obsidian-Notiz(en) hin: " + " | ".join(OBSIDIAN_INFO[:3])
+        for ws in list(active_connections):
+            try:
+                await process_message(str(id(ws)), prompt, ws)
+            except Exception:
+                active_connections.discard(ws)
+    return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
 
 
 @app.get("/config")
@@ -912,18 +954,20 @@ async def serve_index():
 async def startup_and_refresh():
     """Load all startup data async without blocking the server, retry weather if network not ready,
     then refresh every 30 minutes."""
-    global WEATHER_INFO, TASKS_INFO, MAIL_INFO, CALENDAR_INFO
+    global WEATHER_INFO, TASKS_INFO, MAIL_INFO, CALENDAR_INFO, OBSIDIAN_INFO
     loop = asyncio.get_event_loop()
 
     print("[jarvis] Startup: Lade Daten...", flush=True)
 
-    # Tasks, mail, calendar don't need external network — load immediately
+    # Tasks, mail, calendar, obsidian don't need external network — load immediately
     TASKS_INFO = await loop.run_in_executor(None, get_tasks_sync)
     MAIL_INFO = await loop.run_in_executor(None, get_mail_sync)
     CALENDAR_INFO = await loop.run_in_executor(None, get_calendar_sync)
+    OBSIDIAN_INFO = await loop.run_in_executor(None, get_obsidian_info_sync)
     print(f"[jarvis] Tasks: {len(TASKS_INFO)} geladen", flush=True)
     print(f"[jarvis] Mails: {len(MAIL_INFO)} ungelesen", flush=True)
     print(f"[jarvis] Kalender: {len(CALENDAR_INFO)} Termine (7 Tage)", flush=True)
+    print(f"[jarvis] Obsidian: {len(OBSIDIAN_INFO)} offene Notizen", flush=True)
 
     # Weather requires network — retry every 30s until ready (max 20 min)
     WEATHER_INFO = await loop.run_in_executor(None, get_weather_sync)
@@ -946,7 +990,8 @@ async def startup_and_refresh():
         TASKS_INFO = await loop.run_in_executor(None, get_tasks_sync)
         MAIL_INFO = await loop.run_in_executor(None, get_mail_sync)
         CALENDAR_INFO = await loop.run_in_executor(None, get_calendar_sync)
-        print(f"[jarvis] Refresh done: Tasks={len(TASKS_INFO)}, Mails={len(MAIL_INFO)}, Kalender={len(CALENDAR_INFO)}", flush=True)
+        OBSIDIAN_INFO = await loop.run_in_executor(None, get_obsidian_info_sync)
+        print(f"[jarvis] Refresh done: Tasks={len(TASKS_INFO)}, Mails={len(MAIL_INFO)}, Kalender={len(CALENDAR_INFO)}, Obsidian={len(OBSIDIAN_INFO)}", flush=True)
 
 
 from contextlib import asynccontextmanager

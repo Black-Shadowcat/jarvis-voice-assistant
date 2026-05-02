@@ -143,13 +143,21 @@ JARVIS passt sich automatisch der macOS-Systemeinstellung an — kein manuelles 
 
 ## Obsidian Integration
 
-JARVIS kann Notizen direkt in deine Obsidian Inbox schreiben:
+JARVIS kann Notizen direkt in deine Obsidian Inbox schreiben, lesen und löschen:
 
-1. Erstelle einen Ordner in deiner Vault (z.B. `01 Inbox/Jarvis/`)
-2. Trage den Pfad als `obsidian_inbox_path` in der Config UI ein
-3. Sprich: *„Jarvis, notiere: ..."* oder *„Merke dir: ..."*
+1. Trage den Pfad zu deiner Inbox als `obsidian_inbox_path` in der Config UI ein (z.B. `/Users/matthias/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vault/01 Inbox`)
+2. Fertig — kein Unterordner nötig
 
-JARVIS erstellt eine `.md` Datei mit Zeitstempel als Dateiname. Obsidian zeigt die Notiz sofort in der Inbox an.
+| Spracheingabe | Aktion |
+|---|---|
+| „Jarvis, notiere: ..." / „Merke dir: ..." | Neue Notiz schreiben |
+| „Welche Notizen hast du?" / „Was steht in Obsidian?" | Alle Inbox-Notizen lesen und vorlesen |
+| „Markiere als erledigt: Keyword" / „Lösche Notiz: ..." | Notiz per Stichwort löschen |
+| „Lösche alle Notizen" | Alle Inbox-Notizen löschen |
+
+JARVIS erstellt `.md` Dateien mit Datum + Inhalts-Slug als Dateiname (z.B. `2026-05-02 Einkaufen.md`). Obsidian zeigt die Notiz sofort in der Inbox an.
+
+> **Hinweis:** JARVIS weist beim Activate-Greeting automatisch auf offene Inbox-Notizen hin.
 
 ---
 
@@ -234,6 +242,24 @@ launchctl load   ~/Library/LaunchAgents/com.jarvis.session.plist
 
 ---
 
+## Wake-from-Sleep
+
+`scripts/wake-monitor.py` überwacht macOS Wake-Events und benachrichtigt JARVIS, wenn der Mac aus dem Ruhezustand aufwacht:
+
+- Lauscht auf System-Log-Events (`log stream`) nach "Wake reason"
+- Wartet 8 Sekunden (bis Netzwerk und Server bereit sind)
+- Ruft `POST /api/wake` am Server auf
+- JARVIS meldet sich automatisch und weist auf offene Obsidian-Notizen hin
+
+```bash
+# Manuell starten (wird von launch-session.sh automatisch gestartet)
+python3.11 scripts/wake-monitor.py
+```
+
+Für persistenten Betrieb im Hintergrund: wake-monitor per launchd als eigener Job konfigurieren (analog `com.jarvis.server.plist`).
+
+---
+
 ## Troubleshooting
 
 ### Server startet nicht / Port belegt
@@ -307,7 +333,8 @@ jarvis-voice-assistant/
 │   └── style.css                # Dark/Light Theme (CSS custom properties)
 └── scripts/
     ├── launch-session.sh        # Vollständiger Start
-    └── mic-mute-menubar.py      # Menüleisten Mic-Mute Button
+    ├── mic-mute-menubar.py      # Menüleisten Mic-Mute Button
+    └── wake-monitor.py          # Wake-from-Sleep Erkennung → Jarvis benachrichtigen
 ```
 
 ---
@@ -327,6 +354,8 @@ jarvis-voice-assistant/
 | `KALENDER` | „Termine heute/diese Woche" | Kalender via Home Assistant |
 | `LICHT` | „Licht an", „Wohnzimmer 50%" | Home Assistant Lichter |
 | `NOTIZ` | „Notiere...", „Merke dir..." | Markdown-Datei in Obsidian Inbox |
+| `NOTIZ_LIST` | „Welche Notizen?", „Was steht in Obsidian?" | Alle Inbox-Notizen vorlesen |
+| `NOTIZ_ERLEDIGT` | „Erledigt: Keyword", „Lösche Notiz..." | Notiz per Stichwort löschen |
 
 ---
 
