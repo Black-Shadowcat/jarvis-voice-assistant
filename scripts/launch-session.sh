@@ -114,8 +114,8 @@ open -na "Google Chrome" --args \
     --in-process-gpu
 echo "  → Chrome gestartet via Launch Services"
 
-# Wait 15s then verify — longer window since open is async and Chrome needs init time
-sleep 15
+# Wait for Chrome process to appear — 5s is enough on M4
+sleep 5
 if ! pgrep -f "jarvis-chrome-profile" > /dev/null 2>&1; then
     echo "  → Chrome nicht gestartet — retry..."
     sleep 3
@@ -153,7 +153,7 @@ fi
 
 # 4. Arrange windows in 4 equal quadrants
 echo "[4/5] Arranging windows..."
-sleep 5
+sleep 3
 /opt/homebrew/bin/python3.11 - <<'PYEOF'
 import json, subprocess, sys
 
