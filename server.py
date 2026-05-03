@@ -421,10 +421,10 @@ AUSSPRACHE: Schreibe Temperaturen immer als "X Grad" oder "X Komma Y Grad" — n
 
 Du hast die volle Kontrolle ueber den Browser von {USER_NAME}. Du kannst im Internet suchen, Webseiten oeffnen und den Bildschirm sehen. Wenn Sir dich bittet etwas nachzuschauen, zu recherchieren, zu googeln, eine Seite zu oeffnen, oder irgendetwas im Internet zu tun — nutze IMMER eine Aktion. Frag nicht ob du es tun sollst, tu es einfach.
 
-AKTIONEN - Schreibe die passende Aktion ans ENDE deiner Antwort. Der Text VOR der Aktion wird vorgelesen, die Aktion selbst wird still ausgefuehrt.
+AKTIONEN - Wenn eine Aktion noetig ist, schreibe NUR die Aktion — keinen Text davor, keine Einleitung, keine Bestaetigung. Das Ergebnis wird automatisch vorgelesen.
 [ACTION:SEARCH] suchbegriff - Internet durchsuchen und Ergebnisse zusammenfassen
 [ACTION:OPEN] url - URL im Browser oeffnen
-[ACTION:SCREEN] - Bildschirm ansehen und beschreiben. WICHTIG: Bei SCREEN schreibe NUR die Aktion, KEINEN Text davor. Also NUR "[ACTION:SCREEN]" und sonst nichts.
+[ACTION:SCREEN] - Bildschirm ansehen und beschreiben.
 [ACTION:NEWS] - Aktuelle Weltnachrichten abrufen. Nutze diese Aktion wenn nach News, Nachrichten, was in der Welt passiert, aktuelle Lage oder Weltgeschehen gefragt wird. Schreibe einen kurzen Satz davor wie "Ich schaue nach den aktuellen Nachrichten."
 [ACTION:REMINDER_ADD] aufgabe - Neue Erinnerung in die Inbox schreiben. Nutze diese Aktion wenn Sir etwas hinzufuegen, notieren, merken oder erinnert werden moechte.
 [ACTION:REMINDER_DONE] stichwort - Erinnerung als erledigt markieren. Nutze diese Aktion wenn Sir sagt dass etwas erledigt, abgehakt oder fertig ist.
@@ -743,18 +743,33 @@ end tell'''
     return ""
 
 
+# Actions whose result is already a clean, speakable string — no second LLM call needed
+_TEMPLATE_ACTIONS = {"LICHT", "REMINDER_ADD", "REMINDER_DONE", "NOTIZ", "NOTIZ_ERLEDIGT"}
+
+
+async def _speak(ws: WebSocket, session_id: str, text: str):
+    """TTS, append to history, send to client."""
+    audio = await synthesize_speech(text)
+    print(f"  Jarvis: {text[:100]}", flush=True)
+    conversations[session_id].append({"role": "assistant", "content": text})
+    await ws.send_json({
+        "type": "response",
+        "text": text,
+        "audio": base64.b64encode(audio).decode("utf-8") if audio else "",
+    })
+
+
 async def process_message(session_id: str, user_text: str, ws: WebSocket):
-    """Process message and send responses via WebSocket."""
+    """Process message and send exactly one spoken response via WebSocket."""
     if session_id not in conversations:
         conversations[session_id] = []
 
     conversations[session_id].append({"role": "user", "content": user_text})
     history = conversations[session_id][-16:]
 
-    # LLM call
     response = await ai.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=400,
+        max_tokens=300,
         system=get_system_prompt(),
         messages=history,
     )
@@ -762,67 +777,63 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
     print(f"  LLM raw: {reply[:200]}", flush=True)
     spoken_text, action = extract_action(reply)
 
-    # Speak the main response immediately
-    if spoken_text:
-        audio = await synthesize_speech(spoken_text)
-        print(f"  Jarvis: {spoken_text[:80]}", flush=True)
-        print(f"  Audio bytes: {len(audio)}", flush=True)
-        conversations[session_id].append({"role": "assistant", "content": spoken_text})
-        await ws.send_json({
-            "type": "response",
-            "text": spoken_text,
-            "audio": base64.b64encode(audio).decode("utf-8") if audio else "",
-        })
-
-    # Never execute actions for the activate greeting — data is already in the system prompt
+    # ── Activate greeting — no actions allowed, speak and done
     if user_text.lower().startswith("jarvis activate"):
+        await _speak(ws, session_id, spoken_text)
         return
 
-    # Execute action if any
-    if action:
-        print(f"  Action: {action['type']} -> {action['payload'][:100]}", flush=True)
+    # ── No action → plain reply
+    if not action:
+        await _speak(ws, session_id, spoken_text)
+        return
 
-        # Quick voice feedback for SCREEN so user knows Jarvis is working
-        if action["type"] == "SCREEN":
-            hint = "Lassen Sie mich einen Blick auf Ihren Bildschirm werfen."
-            hint_audio = await synthesize_speech(hint)
-            await ws.send_json({
-                "type": "response",
-                "text": hint,
-                "audio": base64.b64encode(hint_audio).decode("utf-8") if hint_audio else "",
-            })
+    # ── Action present — pre-action LLM text is NOT spoken
+    print(f"  Action: {action['type']} -> {action['payload'][:100]}", flush=True)
 
-        try:
-            action_result = await execute_action(action)
-            print(f"  Result: {action_result}", flush=True)
-        except Exception as e:
-            print(f"  Action error: {e}", flush=True)
-            action_result = f"Fehler: {e}"
-
-        if action["type"] == "OPEN":
-            # Just opened browser, nothing to summarize
-            return
-
-        # SEARCH, BROWSE, SCREEN — summarize results
-        if action_result and "fehlgeschlagen" not in action_result:
-            summary_resp = await ai.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=250,
-                system=f"Du bist Jarvis. Fasse die folgenden Informationen KURZ auf Deutsch zusammen, maximal 3 Saetze, im Jarvis-Stil. Sprich den Nutzer als {USER_ADDRESS} an. KEINE Tags in eckigen Klammern. KEINE ACTION-Tags.",
-                messages=[{"role": "user", "content": f"Fasse zusammen:\n\n{action_result}"}],
-            )
-            summary = summary_resp.content[0].text
-            summary, _ = extract_action(summary)
-        else:
-            summary = f"Das hat leider nicht funktioniert, {USER_ADDRESS}."
-
-        audio2 = await synthesize_speech(summary)
-        conversations[session_id].append({"role": "assistant", "content": summary})
+    # Brief audio hint only for SCREEN (screenshot + vision API takes a few seconds)
+    if action["type"] == "SCREEN":
+        hint_audio = await synthesize_speech("Einen Moment.")
         await ws.send_json({
-            "type": "response",
-            "text": summary,
-            "audio": base64.b64encode(audio2).decode("utf-8") if audio2 else "",
+            "type": "response", "text": "…",
+            "audio": base64.b64encode(hint_audio).decode("utf-8") if hint_audio else "",
         })
+
+    try:
+        action_result = await execute_action(action)
+        print(f"  Result: {action_result}", flush=True)
+    except Exception as e:
+        print(f"  Action error: {e}", flush=True)
+        action_result = f"Fehler: {e}"
+
+    if action["type"] == "OPEN":
+        return
+
+    # ── Template actions: action_result is already speakable — no LLM needed
+    if action["type"] in _TEMPLATE_ACTIONS:
+        await _speak(ws, session_id, action_result or "Erledigt.")
+        return
+
+    # ── Complex actions (SEARCH, NEWS, SCREEN, TASKS_LIST, KALENDER, MAIL_READ, NOTIZ_LIST):
+    #    one-sentence LLM summary, no fluff
+    if action_result and "Fehler" not in action_result and "fehlgeschlagen" not in action_result:
+        summary_resp = await ai.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=80,
+            system=(
+                f"Antworte in einem einzigen kurzen Satz auf Deutsch. "
+                f"Keine Einleitung, kein 'Sehr gerne', kein 'Natuerlich', kein 'Gerne', kein 'Hier'. "
+                f"Keine Wiederholung der Anfrage. Nur die reine Information. "
+                f"Sprich den Nutzer als {USER_ADDRESS} an — aber nur wenn es natuerlich passt. "
+                f"KEINE Tags in eckigen Klammern. KEINE ACTION-Tags."
+            ),
+            messages=[{"role": "user", "content": action_result}],
+        )
+        summary = summary_resp.content[0].text
+        summary, _ = extract_action(summary)
+    else:
+        summary = f"Das hat leider nicht funktioniert, {USER_ADDRESS}."
+
+    await _speak(ws, session_id, summary)
 
 
 @app.websocket("/ws")
