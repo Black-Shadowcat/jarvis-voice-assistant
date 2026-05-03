@@ -9,6 +9,7 @@ import base64
 import io
 import json
 import os
+import random
 import re
 import subprocess
 import time
@@ -127,6 +128,8 @@ def _parse_licht(payload: str):
                 break
 
     return cmd, brightness, key, room_str
+
+_last_licht_room: str | None = None  # tracks last room for context-aware follow-up replies
 
 ai = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 http = httpx.AsyncClient(timeout=30)
@@ -678,11 +681,50 @@ end tell'''
         }
         room_label = _ROOM_DISPLAY.get(room_key, room_key.capitalize())
         sir = f", {USER_ADDRESS}"
+
+        global _last_licht_room
+        same_room = (room_key == _last_licht_room)
+        _last_licht_room = room_key
+
         if cmd == "turn_off":
-            return f"{room_label} ausgeschaltet{sir}."
-        elif brightness is not None:
-            return f"{room_label} auf {brightness}% gedimmt{sir}."
-        return f"{room_label} eingeschaltet{sir}."
+            if same_room:
+                return random.choice([
+                    f"Ist aus{sir}.",
+                    f"Ausgeschaltet{sir}.",
+                    f"Erledigt{sir}.",
+                ])
+            return random.choice([
+                f"{room_label} ausgeschaltet{sir}.",
+                f"{room_label} ist aus{sir}.",
+                f"Licht im {room_label} deaktiviert{sir}.",
+            ])
+
+        if brightness is not None:
+            bri = f"{brightness} Prozent"
+            if same_room:
+                return random.choice([
+                    f"Auf {bri} gesetzt{sir}.",
+                    f"Jetzt auf {bri}{sir}.",
+                    f"Angenehm reduziert auf {bri}{sir}.",
+                ])
+            return random.choice([
+                f"{room_label} auf {bri} gedimmt{sir}.",
+                f"{room_label} jetzt auf {bri}{sir}.",
+                f"Licht im {room_label} auf {bri}{sir}.",
+            ])
+
+        # turn_on
+        if same_room:
+            return random.choice([
+                f"Eingeschaltet{sir}.",
+                f"Ist an{sir}.",
+                f"Erledigt{sir}.",
+            ])
+        return random.choice([
+            f"{room_label} eingeschaltet{sir}.",
+            f"{room_label} ist an{sir}.",
+            f"Licht im {room_label} ist an{sir}.",
+        ])
 
     elif t == "NOTIZ":
         text = p.strip()
