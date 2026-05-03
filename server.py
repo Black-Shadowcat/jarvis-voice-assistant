@@ -13,6 +13,8 @@ import random
 import re
 import subprocess
 import time
+from typing import Optional, Literal
+from pydantic import BaseModel, Field, ValidationError
 
 import anthropic
 import httpx
@@ -130,6 +132,24 @@ def _parse_licht(payload: str):
     return cmd, brightness, key, room_str
 
 _last_licht_room: str | None = None  # tracks last room for context-aware follow-up replies
+
+# ── Structured Output Models ───────────────────────────────────────────────
+# raum uses str (not Literal) to accept all LIGHT_MAP keys; validated at runtime.
+# Note: "bad" from original spec omitted — not present in LIGHT_MAP.
+class LichtParameters(BaseModel):
+    raum: str
+    zustand: Optional[Literal["an", "aus"]] = None
+    helligkeit: Optional[int] = Field(None, ge=1, le=100)
+
+class ActionModel(BaseModel):
+    action: Literal[
+        "licht", "reminder_add", "reminder_done", "search", "open", "browse",
+        "mail_read", "notiz", "notiz_erledigt", "kalender", "tasks_list",
+        "notiz_list", "screen", "news", "none"
+    ]
+    parameters: dict = Field(default_factory=dict)
+    response: Optional[str] = None
+# ──────────────────────────────────────────────────────────────────────────
 
 ai = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 http = httpx.AsyncClient(timeout=30)
@@ -439,6 +459,16 @@ AKTIONEN - Wenn eine Aktion noetig ist, schreibe NUR die Aktion — keinen Text 
 [ACTION:NOTIZ_LIST] - Alle Notizen in der Obsidian Inbox auflisten und vorlesen. Nutze diese Aktion IMMER wenn Sir fragt welche Notizen, Erinnerungen oder Aufzeichnungen in Obsidian sind.
 [ACTION:NOTIZ_ERLEDIGT] stichwort - Notiz(en) aus der Obsidian Inbox als erledigt markieren (loeschen). Nutze "alle" um alle Notizen zu loeschen. Nutze diese Aktion IMMER wenn Sir Obsidian-Notizen als erledigt, abgehakt oder fertig markieren moechte — NIEMALS REMINDER_DONE dafuer verwenden.
 
+AUSGABEFORMAT — Bevorzuge JSON:
+Antworte IMMER als JSON-Objekt. Bei normaler Antwort ohne Aktion:
+{{"action": "none", "parameters": {{}}, "response": "Antworttext hier"}}
+Bei Lichtsteuerung:
+{{"action": "licht", "parameters": {{"raum": "buero", "zustand": "an", "helligkeit": null}}, "response": null}}
+Raeume fuer licht (kanonisch): alle, wohnzimmer, kueche, buero, flur, schlafzimmer, balkon, sideboard, nachtschrank, iris, go. Zustand: "an" oder "aus". Helligkeit: 1-100 oder null.
+Bei allen anderen Aktionen: parameters: {{"payload": "bisheriger payload-text"}}
+Alle action-Werte: none, licht, reminder_add, reminder_done, search, open, browse, mail_read, notiz, notiz_erledigt, kalender, tasks_list, notiz_list, screen, news
+Falls JSON nicht moeglich: altes Format [ACTION:TYP] payload bleibt gueltig.
+
 WENN {USER_NAME} "Jarvis activate" sagt:
 - Begruesse ihn passend zur Tageszeit (aktuelle Zeit: {{time}}).
 - Gebe eine kurze Info ueber das Wetter — Temperatur und ob Sonne/klar/bewoelkt/Regen, und wie es sich anfuehlt. Keine Luftfeuchtigkeit.
@@ -463,6 +493,30 @@ def extract_action(text: str):
         clean = text[:match.start()].strip()
         return clean, {"type": match.group(1), "payload": match.group(2).strip()}
     return text, None
+
+
+def parse_structured_action(reply: str) -> Optional[ActionModel]:
+    """Try to parse LLM reply as structured JSON ActionModel. Returns None on any failure."""
+    try:
+        text = reply.strip()
+        # Strip markdown code fences if present
+        if text.startswith("```"):
+            lines = text.split("\n")
+            inner = lines[1:] if len(lines) > 1 else lines
+            if inner and inner[-1].strip() == "```":
+                inner = inner[:-1]
+            text = "\n".join(inner).strip()
+        # Find first JSON object in text
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start == -1 or end <= start:
+            return None
+        data = json.loads(text[start:end])
+        return ActionModel(**data)
+    except ValidationError:
+        return None
+    except Exception:
+        return None
 
 
 async def synthesize_speech(text: str) -> bytes:
@@ -815,6 +869,203 @@ async def _speak(ws: WebSocket, session_id: str, text: str):
     })
 
 
+# ── Structured Output Dispatcher ──────────────────────────────────────────
+
+_ROOM_DISPLAY_SHARED: dict[str, str] = {
+    "büro": "Büro", "buro": "Büro", "buero": "Büro",
+    "arbeitszimmer": "Büro", "arbeitsraum": "Büro", "office": "Büro", "studio": "Büro",
+    "küche": "Küche", "kuche": "Küche", "kueche": "Küche", "kitchen": "Küche",
+    "alle": "Alle Lichter", "alles": "Alle Lichter",
+    "ueberall": "Alle Lichter", "überall": "Alle Lichter", "gesamt": "Alle Lichter",
+    "wohnzimmer": "Wohnzimmer", "wohnraum": "Wohnzimmer", "living": "Wohnzimmer",
+    "flur": "Flur", "gang": "Flur", "eingang": "Flur", "diele": "Flur", "hallway": "Flur",
+    "schlafzimmer": "Schlafzimmer", "schlafraum": "Schlafzimmer", "bedroom": "Schlafzimmer",
+    "balkon": "Balkon", "terrasse": "Balkon",
+    "sideboard": "Sideboard", "nachtschrank": "Nachtschrank",
+    "iris": "Iris", "hue go": "Hue Go", "go": "Hue Go",
+}
+
+
+def _structured_to_legacy_action(structured: ActionModel) -> Optional[dict]:
+    """Map ActionModel to legacy {"type": ..., "payload": ...} for non-LICHT actions."""
+    p = structured.parameters
+    _map = {
+        "search":         ("SEARCH",         p.get("query", p.get("payload", ""))),
+        "open":           ("OPEN",           p.get("url", p.get("payload", ""))),
+        "browse":         ("BROWSE",         p.get("url", p.get("payload", ""))),
+        "screen":         ("SCREEN",         ""),
+        "news":           ("NEWS",           ""),
+        "tasks_list":     ("TASKS_LIST",     ""),
+        "notiz_list":     ("NOTIZ_LIST",     ""),
+        "reminder_add":   ("REMINDER_ADD",   p.get("aufgabe", p.get("text", p.get("payload", "")))),
+        "reminder_done":  ("REMINDER_DONE",  p.get("stichwort", p.get("keyword", p.get("payload", "")))),
+        "mail_read":      ("MAIL_READ",      p.get("stichwort", p.get("keyword", p.get("payload", "")))),
+        "kalender":       ("KALENDER",       p.get("zeitraum", str(p.get("tage", "woche")))),
+        "notiz":          ("NOTIZ",          p.get("text", p.get("payload", ""))),
+        "notiz_erledigt": ("NOTIZ_ERLEDIGT", p.get("stichwort", p.get("keyword", p.get("payload", "")))),
+    }
+    if structured.action in _map:
+        t, payload = _map[structured.action]
+        return {"type": t, "payload": str(payload)}
+    return None
+
+
+async def handle_licht_structured(params: LichtParameters) -> str:
+    """Execute LICHT from structured parameters — no string parsing, only LIGHT_MAP lookup."""
+    if not HA_URL or not HA_TOKEN:
+        return "Home Assistant nicht konfiguriert."
+
+    raum = params.raum.strip().lower()
+
+    def _lookup(s: str) -> Optional[str]:
+        if s in LIGHT_MAP:
+            return s
+        n = s.replace("ü", "u").replace("ö", "o").replace("ä", "a").replace("ß", "ss")
+        return n if n in LIGHT_MAP else None
+
+    key = _lookup(raum)
+    if key is None:
+        known = ", ".join(sorted({
+            k for k in LIGHT_MAP if k not in (
+                "ueberall", "gesamt", "living", "kitchen", "arbeitsraum", "office", "studio",
+                "gang", "eingang", "diele", "hallway", "schlafraum", "bedroom", "terrasse",
+                "go", "buero", "buro", "kuche", "kueche", "wohnraum"
+            )
+        }))
+        return f"Raum '{params.raum}' nicht erkannt, {USER_ADDRESS}. Bekannte Räume: {known}."
+
+    cmd = "turn_off" if params.zustand == "aus" else "turn_on"
+    entity = LIGHT_MAP[key]
+    entities = entity if isinstance(entity, list) else [entity]
+
+    headers = {"Authorization": f"Bearer {HA_TOKEN}", "Content-Type": "application/json"}
+    for eid in entities:
+        data: dict = {"entity_id": eid}
+        if params.helligkeit is not None:
+            data["brightness_pct"] = params.helligkeit
+        try:
+            await http.post(f"{HA_URL}/api/services/light/{cmd}", headers=headers, json=data)
+        except Exception as e:
+            return f"Home Assistant Fehler: {e}"
+
+    room_label = _ROOM_DISPLAY_SHARED.get(key, key.capitalize())
+    sir = f", {USER_ADDRESS}"
+
+    global _last_licht_room
+    same_room = (key == _last_licht_room)
+    _last_licht_room = key
+
+    if cmd == "turn_off":
+        if same_room:
+            return random.choice([f"Ist aus{sir}.", f"Ausgeschaltet{sir}.", f"Erledigt{sir}."])
+        return random.choice([
+            f"{room_label} ausgeschaltet{sir}.",
+            f"{room_label} ist aus{sir}.",
+            f"Licht im {room_label} deaktiviert{sir}.",
+        ])
+
+    if params.helligkeit is not None:
+        bri = f"{params.helligkeit} Prozent"
+        if same_room:
+            return random.choice([
+                f"Auf {bri} gesetzt{sir}.", f"Jetzt auf {bri}{sir}.", f"Angenehm reduziert auf {bri}{sir}.",
+            ])
+        return random.choice([
+            f"{room_label} auf {bri} gedimmt{sir}.",
+            f"{room_label} jetzt auf {bri}{sir}.",
+            f"Licht im {room_label} auf {bri}{sir}.",
+        ])
+
+    if same_room:
+        return random.choice([f"Eingeschaltet{sir}.", f"Ist an{sir}.", f"Erledigt{sir}."])
+    return random.choice([
+        f"{room_label} eingeschaltet{sir}.",
+        f"{room_label} ist an{sir}.",
+        f"Licht im {room_label} ist an{sir}.",
+    ])
+
+
+async def handle_structured_action(structured: ActionModel, ws: WebSocket, session_id: str):
+    """Dispatch structured ActionModel — mirrors process_message() flow for actions."""
+
+    # Plain reply — no action
+    if structured.action == "none":
+        text = structured.response or ""
+        if text:
+            await _speak(ws, session_id, text)
+        return
+
+    # LICHT — new structured path, no _parse_licht()
+    if structured.action == "licht":
+        try:
+            params = LichtParameters(**structured.parameters)
+            result = await handle_licht_structured(params)
+        except Exception as e:
+            print(f"  Structured LICHT failed ({e}), falling back to legacy parser", flush=True)
+            p = structured.parameters
+            payload_parts = [str(p.get("raum", ""))]
+            if p.get("zustand"):
+                payload_parts.append(str(p["zustand"]))
+            if p.get("helligkeit") is not None:
+                payload_parts.append(str(p["helligkeit"]))
+            result = await execute_action({"type": "LICHT", "payload": " ".join(payload_parts)})
+        await _speak(ws, session_id, result or f"Erledigt, {USER_ADDRESS}.")
+        return
+
+    # All other actions — convert to legacy dict and use existing execute_action()
+    legacy = _structured_to_legacy_action(structured)
+    if legacy is None:
+        return
+
+    # OPEN — no spoken response
+    if structured.action == "open":
+        await execute_action(legacy)
+        return
+
+    # SCREEN — brief audio hint while vision API runs
+    if structured.action == "screen":
+        hint_audio = await synthesize_speech("Einen Moment.")
+        await ws.send_json({
+            "type": "response", "text": "…",
+            "audio": base64.b64encode(hint_audio).decode("utf-8") if hint_audio else "",
+        })
+
+    try:
+        action_result = await execute_action(legacy)
+        print(f"  Result: {action_result}", flush=True)
+    except Exception as e:
+        print(f"  Structured action error: {e}", flush=True)
+        action_result = f"Fehler: {e}"
+
+    # Template actions — result is already speakable
+    if legacy["type"] in _TEMPLATE_ACTIONS:
+        await _speak(ws, session_id, action_result or f"Erledigt, {USER_ADDRESS}.")
+        return
+
+    # Complex actions — one-sentence LLM summary (same as legacy path)
+    if action_result and "Fehler" not in action_result and "fehlgeschlagen" not in action_result:
+        summary_resp = await ai.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=80,
+            system=(
+                f"Antworte in einem einzigen kurzen Satz auf Deutsch. "
+                f"Keine Einleitung, kein 'Sehr gerne', kein 'Natuerlich', kein 'Gerne', kein 'Hier'. "
+                f"Keine Wiederholung der Anfrage. Nur die reine Information. "
+                f"Du darfst '{USER_ADDRESS}' genau einmal verwenden, bevorzugt am Satzende. "
+                f"KEINE Tags in eckigen Klammern. KEINE ACTION-Tags."
+            ),
+            messages=[{"role": "user", "content": action_result}],
+        )
+        summary = summary_resp.content[0].text
+        summary, _ = extract_action(summary)
+    else:
+        summary = f"Das hat leider nicht funktioniert, {USER_ADDRESS}."
+
+    await _speak(ws, session_id, summary)
+
+# ──────────────────────────────────────────────────────────────────────────
+
+
 async def process_message(session_id: str, user_text: str, ws: WebSocket):
     """Process message and send exactly one spoken response via WebSocket."""
     if session_id not in conversations:
@@ -831,6 +1082,18 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
     )
     reply = response.content[0].text
     print(f"  LLM raw: {reply[:200]}", flush=True)
+
+    # ── Try structured JSON path first
+    structured = parse_structured_action(reply)
+    if structured:
+        print(f"  Structured action: {structured.action}", flush=True)
+        if user_text.lower().startswith("jarvis activate"):
+            await _speak(ws, session_id, structured.response or reply)
+            return
+        await handle_structured_action(structured, ws, session_id)
+        return
+
+    # ── Fallback: legacy string-based parsing (unchanged)
     spoken_text, action = extract_action(reply)
 
     # ── Activate greeting — no actions allowed, speak and done
