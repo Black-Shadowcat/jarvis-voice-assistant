@@ -38,22 +38,95 @@ HA_URL = config.get("ha_url", "").rstrip("/")
 HA_TOKEN = config.get("ha_token", "")
 
 LIGHT_MAP: dict[str, str | list[str]] = {
+    # Alle
     "alle":          "light.alle_lichter",
     "alles":         "light.alle_lichter",
+    "ueberall":      "light.alle_lichter",
+    "überall":       "light.alle_lichter",
+    "gesamt":        "light.alle_lichter",
+    # Wohnzimmer
     "wohnzimmer":    "light.wohnzimmer",
+    "wohnraum":      "light.wohnzimmer",
+    "living":        "light.wohnzimmer",
+    # Küche
     "küche":         "light.kuche",
     "kuche":         "light.kuche",
+    "kueche":        "light.kuche",
+    "kitchen":       "light.kuche",
+    # Büro
     "büro":          "light.buro",
     "buro":          "light.buro",
+    "buero":         "light.buro",
     "arbeitszimmer": "light.buro",
+    "arbeitsraum":   "light.buro",
+    "office":        "light.buro",
+    "studio":        "light.buro",
+    # Flur
     "flur":          "light.flur",
+    "gang":          "light.flur",
+    "eingang":       "light.flur",
+    "diele":         "light.flur",
+    "hallway":       "light.flur",
+    # Schlafzimmer
     "schlafzimmer":  "light.schlafzimmer",
+    "schlafraum":    "light.schlafzimmer",
+    "bedroom":       "light.schlafzimmer",
+    # Balkon
     "balkon":        "light.balkon_led",
+    "terrasse":      "light.balkon_led",
+    # Einzellampen
     "iris":          "light.hue_iris",
     "hue go":        "light.hue_go_1",
+    "go":            "light.hue_go_1",
+    # Gruppen
     "sideboard":     ["light.sideboard_links", "light.sideboard_rechts"],
     "nachtschrank":  ["light.nachtschrank_links", "light.nachtschrank_rechts"],
 }
+
+_LIGHT_STOP = {"das", "die", "den", "dem", "der", "ein", "eine", "licht", "lampe",
+               "im", "in", "am", "an", "bitte", "mal", "doch", "kannst", "du",
+               "mach", "mache", "schalte", "schalten", "stell", "stelle"}
+_CMD_ON  = {"an", "ein", "einschalten", "einschalte", "anschalten", "anschalte",
+            "anmachen", "anmache", "einmachen", "einmache"}
+_CMD_OFF = {"aus", "ausschalten", "ausschalte", "ausmachen", "ausmache"}
+
+
+def _parse_licht(payload: str):
+    """Parse LICHT payload → (cmd, brightness, room_key).
+    Returns room_key=None if room cannot be identified."""
+    words = payload.strip().lower().split()
+    cmd = "turn_on"
+    brightness: int | None = None
+    room_words: list[str] = []
+
+    for word in words:
+        w = word.rstrip("%")
+        if word in _CMD_OFF:
+            cmd = "turn_off"
+        elif word in _CMD_ON:
+            cmd = "turn_on"
+        elif w.isdigit():
+            brightness = int(w)
+            cmd = "turn_on"
+        elif word not in _LIGHT_STOP:
+            room_words.append(word)
+
+    # Multi-word lookup first, then single-word fallback
+    room_str = " ".join(room_words)
+    def _lookup(s: str):
+        if s in LIGHT_MAP:
+            return s
+        n = s.replace("ü", "u").replace("ö", "o").replace("ä", "a").replace("ß", "ss")
+        return n if n in LIGHT_MAP else None
+
+    key = _lookup(room_str)
+    if key is None:
+        for w in room_words:
+            key = _lookup(w)
+            if key:
+                break
+
+    return cmd, brightness, key, room_str
 
 ai = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 http = httpx.AsyncClient(timeout=30)
@@ -562,49 +635,35 @@ end tell'''
     elif t == "LICHT":
         if not HA_URL or not HA_TOKEN:
             return "Home Assistant nicht konfiguriert."
-        words = p.strip().lower().split()
-        if not words:
+        if not p.strip():
             return "Kein Lichtbefehl angegeben."
 
-        cmd = "turn_on"
-        brightness: int | None = None
-        room_words: list[str] = []
+        cmd, brightness, room_key, room_str = _parse_licht(p)
 
-        for i, word in enumerate(words):
-            w = word.rstrip("%")
-            if word in ("an", "ein", "einschalten"):
-                cmd = "turn_on"
-                room_words = [x for x in words[:i] if x not in ("das", "die", "den", "licht")]
-                break
-            elif word in ("aus", "ausschalten"):
-                cmd = "turn_off"
-                room_words = [x for x in words[:i] if x not in ("das", "die", "den", "licht")]
-                break
-            elif w.isdigit():
-                brightness = int(w)
-                cmd = "turn_on"
-                room_words = [x for x in words[:i] if x not in ("das", "die", "den", "licht", "auf")]
-                break
-        else:
-            room_words = [x for x in words if x not in ("das", "die", "den", "licht")]
+        if room_key is None:
+            known = ", ".join(sorted({
+                k for k in LIGHT_MAP if k not in ("ueberall", "gesamt", "living", "kitchen",
+                "arbeitsraum", "office", "studio", "gang", "eingang", "diele", "hallway",
+                "schlafraum", "bedroom", "terrasse", "go", "buero", "buro", "kuche",
+                "kueche", "wohnraum")
+            }))
+            label = f'"{room_str}"' if room_str else "kein Raum"
+            return f"Raum {label} nicht erkannt, Sir. Bekannte Räume: {known}."
 
-        room = " ".join(room_words) if room_words else "alle"
-        # normalize umlauts for lookup
-        room_norm = room.replace("ü", "u").replace("ö", "o").replace("ä", "a")
-        entity = LIGHT_MAP.get(room) or LIGHT_MAP.get(room_norm) or LIGHT_MAP["alle"]
+        entity = LIGHT_MAP[room_key]
         entities = entity if isinstance(entity, list) else [entity]
 
         headers = {"Authorization": f"Bearer {HA_TOKEN}", "Content-Type": "application/json"}
         for eid in entities:
-            payload: dict = {"entity_id": eid}
+            data: dict = {"entity_id": eid}
             if brightness is not None:
-                payload["brightness_pct"] = brightness
+                data["brightness_pct"] = brightness
             try:
-                await http.post(f"{HA_URL}/api/services/light/{cmd}", headers=headers, json=payload)
+                await http.post(f"{HA_URL}/api/services/light/{cmd}", headers=headers, json=data)
             except Exception as e:
                 return f"Home Assistant Fehler: {e}"
 
-        room_label = room.capitalize() if room != "alle" else "Alle Lichter"
+        room_label = room_key.capitalize() if room_key not in ("alle", "alles") else "Alle Lichter"
         if cmd == "turn_off":
             return f"{room_label} ausgeschaltet."
         elif brightness is not None:
