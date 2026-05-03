@@ -8,8 +8,19 @@ echo "[boot] Waiting for macOS to be fully ready..."
 until pgrep -x "Dock" > /dev/null 2>&1 && pgrep -x "Finder" > /dev/null 2>&1; do
     sleep 3
 done
-echo "[boot] Dock + Finder up — waiting 20s for GPU/display stack..."
-sleep 20
+
+# On a cold boot the GPU/WindowServer stack needs time to settle.
+# If the system has been running for more than 2 minutes (manual Cmd+Shift+J),
+# skip the long wait entirely.
+BOOT_TIME=$(sysctl -n kern.boottime | awk '{print $4}' | tr -d ',')
+UPTIME_SECS=$(( $(date +%s) - BOOT_TIME ))
+if [[ $UPTIME_SECS -lt 120 ]]; then
+    echo "[boot] Fresh boot (${UPTIME_SECS}s uptime) — waiting 20s for GPU/display stack..."
+    sleep 20
+else
+    echo "[boot] System running (${UPTIME_SECS}s uptime) — skipping GPU wait"
+    sleep 2
+fi
 
 # Get the directory where this script is located
 SCRIPT_DIR="${0:A:h}"
@@ -114,8 +125,8 @@ open -na "Google Chrome" --args \
     --in-process-gpu
 echo "  → Chrome gestartet via Launch Services"
 
-# Wait for Chrome process to appear — 5s is enough on M4
-sleep 5
+# Wait for Chrome process to appear — 3s is enough on M4
+sleep 3
 if ! pgrep -f "jarvis-chrome-profile" > /dev/null 2>&1; then
     echo "  → Chrome nicht gestartet — retry..."
     sleep 3
