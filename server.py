@@ -371,6 +371,7 @@ WENN {USER_NAME} "Jarvis activate" sagt:
 - Erwaehne kurz anstehende Termine heute oder morgen, falls vorhanden.
 - Weise kurz auf offene Obsidian-Notizen hin, falls vorhanden.
 - Sei kreativ bei der Begruessung.
+- WICHTIG: Verwende NIEMALS Action-Tags in der Begruessung. Alle Daten sind bereits in === AKTUELLE DATEN === verfuegbar — dort direkt ablesen, keine Actions ausfuehren.
 
 === AKTUELLE DATEN ==={weather_block}{task_block}{obsidian_block}{mail_block}{cal_block}
 ==="""
@@ -713,6 +714,10 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
             "text": spoken_text,
             "audio": base64.b64encode(audio).decode("utf-8") if audio else "",
         })
+
+    # Never execute actions for the activate greeting — data is already in the system prompt
+    if user_text.lower().startswith("jarvis activate"):
+        return
 
     # Execute action if any
     if action:
