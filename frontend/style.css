@@ -150,6 +150,30 @@ body {
     background: var(--mute-bg-hover);
 }
 
+#config-btn {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    background: var(--mute-bg);
+    border: 1px solid var(--mute-border);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    cursor: pointer;
+    color: var(--mute-color);
+    opacity: 0.3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+#config-btn:hover {
+    background: var(--mute-bg-hover);
+    opacity: 0.75;
+}
+
 #transcript::-webkit-scrollbar {
     width: 4px;
 }

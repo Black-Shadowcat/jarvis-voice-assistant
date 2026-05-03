@@ -799,6 +799,15 @@ async def wake_notification():
     return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
 
 
+@app.post("/api/restart")
+async def restart_server():
+    """Terminate the process — launchd KeepAlive will respawn it."""
+    import signal as _signal
+    loop = asyncio.get_event_loop()
+    loop.call_later(0.5, lambda: os.kill(os.getpid(), _signal.SIGTERM))
+    return {"status": "restarting"}
+
+
 @app.get("/config")
 async def serve_config():
     return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "config.html"))

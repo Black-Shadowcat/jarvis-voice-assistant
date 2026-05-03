@@ -236,6 +236,30 @@
 
 <div x-data="configApp()" x-init="init()" x-cloak>
 
+    <!-- Restart confirm modal -->
+    <div x-show="showRestartConfirm"
+         class="fixed inset-0 flex items-center justify-center z-50"
+         style="background: rgba(0,0,0,0.75)">
+        <div class="card rounded-2xl p-7 w-full max-w-sm mx-4">
+            <h3 class="text-sm font-semibold tracking-widest uppercase text-j-gold mb-3">Server neu starten?</h3>
+            <p class="text-j-muted text-sm mb-6">Der laufende Server-Prozess wird beendet. launchd startet ihn automatisch neu. Jarvis ist für ca. 10–15 Sekunden nicht erreichbar.</p>
+            <div class="flex gap-3 justify-end">
+                <button class="btn-reset" @click="showRestartConfirm = false">Abbrechen</button>
+                <button class="btn-test err" style="padding: 0.625rem 1.25rem; font-size: 0.875rem;"
+                        @click="restart()">⟳ Neu starten</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restarting overlay -->
+    <div x-show="restarting"
+         class="fixed inset-0 flex items-center justify-center z-50"
+         style="background: rgba(0,0,0,0.85)">
+        <p style="color: #e05252; font-size: 1.1rem; letter-spacing: 0.12em; font-weight: 300;">
+            ⟳ &nbsp;Server wird neu gestartet…
+        </p>
+    </div>
+
     <!-- Toast -->
     <div x-show="toast.show"
          x-transition:enter="transition ease-out duration-200"
@@ -491,7 +515,11 @@
 
         <!-- ── FOOTER BUTTONS ── -->
         <div class="flex items-center justify-between">
-            <a href="/" class="text-xs text-j-dim hover:text-j-muted transition-colors">← Zurück zu Jarvis</a>
+            <div class="flex items-center gap-5">
+                <a href="/" class="text-xs text-j-dim hover:text-j-muted transition-colors">← Zurück zu Jarvis</a>
+                <button class="btn-test" style="font-size: 0.75rem; padding: 0.4rem 0.875rem; color: #744;"
+                        @click="showRestartConfirm = true">⟳ Neu starten</button>
+            </div>
             <div class="flex gap-3">
                 <button class="btn-reset" @click="reset()">↻ Zurücksetzen</button>
                 <button class="btn-save" @click="save()" :disabled="saving">
@@ -515,6 +543,8 @@ function configApp() {
         show: { anthropic: false, elevenlabs: false, hatoken: false, kachelmann: false },
         saving: false,
         previewing: false,
+        showRestartConfirm: false,
+        restarting: false,
         _toastTimer: null,
 
         async init() {
@@ -626,6 +656,13 @@ function configApp() {
                 this.showToast('error', 'Fehler beim Audio-Preview');
             }
             this.previewing = false;
+        },
+
+        async restart() {
+            this.showRestartConfirm = false;
+            this.restarting = true;
+            try { await fetch('/api/restart', { method: 'POST' }); } catch (e) {}
+            setTimeout(() => { window.location.href = '/config'; }, 5000);
         },
 
         showToast(type, message) {
