@@ -60,7 +60,7 @@ function connect() {
                 queueAudio(data.audio);
             } else {
                 setOrbState('idle');
-                setTimeout(startListening, 500);
+                setTimeout(startListening, 1200);
             }
         } else if (data.type === 'status') {
             status.textContent = data.text;
@@ -82,7 +82,7 @@ function playNext() {
         isPlaying = false;
         setOrbState('listening');
         status.textContent = '';
-        setTimeout(startListening, 500);
+        setTimeout(startListening, 1200);
         return;
     }
     isPlaying = true;
@@ -143,6 +143,7 @@ if (SpeechRecognition) {
     recognition.interimResults = false;
 
     recognition.onresult = (event) => {
+        if (isPlaying) return;
         const last = event.results[event.results.length - 1];
         if (last.isFinal) {
             const text = correctTranscript(last[0].transcript.trim());
