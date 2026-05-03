@@ -823,7 +823,7 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
                 f"Antworte in einem einzigen kurzen Satz auf Deutsch. "
                 f"Keine Einleitung, kein 'Sehr gerne', kein 'Natuerlich', kein 'Gerne', kein 'Hier'. "
                 f"Keine Wiederholung der Anfrage. Nur die reine Information. "
-                f"Sprich den Nutzer als {USER_ADDRESS} an — aber nur wenn es natuerlich passt. "
+                f"Du darfst '{USER_ADDRESS}' genau einmal verwenden, bevorzugt am Satzende. "
                 f"KEINE Tags in eckigen Klammern. KEINE ACTION-Tags."
             ),
             messages=[{"role": "user", "content": action_result}],
