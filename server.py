@@ -663,12 +663,26 @@ end tell'''
             except Exception as e:
                 return f"Home Assistant Fehler: {e}"
 
-        room_label = room_key.capitalize() if room_key not in ("alle", "alles") else "Alle Lichter"
+        _ROOM_DISPLAY = {
+            "büro": "Büro", "buro": "Büro", "buero": "Büro",
+            "arbeitszimmer": "Büro", "arbeitsraum": "Büro", "office": "Büro", "studio": "Büro",
+            "küche": "Küche", "kuche": "Küche", "kueche": "Küche", "kitchen": "Küche",
+            "alle": "Alle Lichter", "alles": "Alle Lichter",
+            "ueberall": "Alle Lichter", "überall": "Alle Lichter", "gesamt": "Alle Lichter",
+            "wohnzimmer": "Wohnzimmer", "wohnraum": "Wohnzimmer", "living": "Wohnzimmer",
+            "flur": "Flur", "gang": "Flur", "eingang": "Flur", "diele": "Flur", "hallway": "Flur",
+            "schlafzimmer": "Schlafzimmer", "schlafraum": "Schlafzimmer", "bedroom": "Schlafzimmer",
+            "balkon": "Balkon", "terrasse": "Balkon",
+            "sideboard": "Sideboard", "nachtschrank": "Nachtschrank",
+            "iris": "Iris", "hue go": "Hue Go", "go": "Hue Go",
+        }
+        room_label = _ROOM_DISPLAY.get(room_key, room_key.capitalize())
+        sir = f", {USER_ADDRESS}"
         if cmd == "turn_off":
-            return f"{room_label} ausgeschaltet."
+            return f"{room_label} ausgeschaltet{sir}."
         elif brightness is not None:
-            return f"{room_label} auf {brightness}% gedimmt."
-        return f"{room_label} eingeschaltet."
+            return f"{room_label} auf {brightness}% gedimmt{sir}."
+        return f"{room_label} eingeschaltet{sir}."
 
     elif t == "NOTIZ":
         text = p.strip()
