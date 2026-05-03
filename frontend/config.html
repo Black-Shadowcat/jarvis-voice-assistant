@@ -454,6 +454,21 @@
             </div>
         </div>
 
+        <!-- ── VERHALTEN ── -->
+        <div class="card rounded-2xl p-6 mb-4">
+            <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-6">Verhalten</h2>
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-j-text">Begrüßung nach Standby</p>
+                    <p class="text-xs text-j-muted mt-0.5">Jarvis meldet sich automatisch beim Aufwachen aus dem Schlafmodus</p>
+                </div>
+                <div class="toggle-track ml-6 flex-shrink-0" :class="{ on: cfg.wake_greeting_enabled }"
+                     @click="cfg.wake_greeting_enabled = !cfg.wake_greeting_enabled">
+                    <div class="toggle-thumb"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- ── APPS ── -->
         <div class="card rounded-2xl p-6 mb-8">
             <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-6">Apps beim Start öffnen</h2>
@@ -557,6 +572,7 @@ function configApp() {
                 const r = await fetch('/api/config');
                 const data = await r.json();
                 if (data.ha_enabled === undefined) data.ha_enabled = !!(data.ha_url);
+                if (data.wake_greeting_enabled === undefined) data.wake_greeting_enabled = true;
                 if (!data.window_layout) data.window_layout = {
                     top_right: 'Visual Studio Code',
                     bottom_left: 'Mail',

@@ -20,5 +20,6 @@
     "top_right":    "Visual Studio Code",
     "bottom_left":  "Mail",
     "bottom_right": "Home Assistant"
-  }
+  },
+  "wake_greeting_enabled": true
 }

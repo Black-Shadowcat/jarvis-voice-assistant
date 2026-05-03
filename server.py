@@ -39,6 +39,7 @@ KACHELMANN_KEY = config.get("kachelmann_api_key", "")
 OBSIDIAN_INBOX = config.get("obsidian_inbox_path", "")
 HA_URL = config.get("ha_url", "").rstrip("/")
 HA_TOKEN = config.get("ha_token", "")
+WAKE_GREETING_ENABLED = config.get("wake_greeting_enabled", True)
 
 LIGHT_MAP: dict[str, str | list[str]] = {
     # Alle
@@ -1183,7 +1184,7 @@ async def wake_notification():
     global OBSIDIAN_INFO
     OBSIDIAN_INFO = get_obsidian_info_sync()
     print(f"[jarvis] Wake: {len(OBSIDIAN_INFO)} Obsidian-Notizen", flush=True)
-    if OBSIDIAN_INFO and active_connections:
+    if WAKE_GREETING_ENABLED and OBSIDIAN_INFO and active_connections:
         prompt = f"Jarvis activate wake — weise kurz auf {len(OBSIDIAN_INFO)} offene Obsidian-Notiz(en) hin: " + " | ".join(OBSIDIAN_INFO[:3])
         for ws in list(active_connections):
             try:
@@ -1217,7 +1218,7 @@ async def get_config_api():
 async def save_config_api(request: Request):
     global ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
     global USER_NAME, USER_ADDRESS, CITY, LAT, LON
-    global KACHELMANN_KEY, HA_URL, HA_TOKEN, ai
+    global KACHELMANN_KEY, HA_URL, HA_TOKEN, ai, WAKE_GREETING_ENABLED
 
     data = await request.json()
 
@@ -1229,7 +1230,7 @@ async def save_config_api(request: Request):
         "user_name", "user_address", "city", "lat", "lon",
         "kachelmann_api_key", "ha_url", "ha_token", "ha_enabled",
         "workspace_path", "obsidian_inbox_path", "browser_url",
-        "spotify_track_uri", "apps", "window_layout",
+        "spotify_track_uri", "apps", "window_layout", "wake_greeting_enabled",
     ]
     for field in allowed:
         if field in data:
@@ -1254,6 +1255,7 @@ async def save_config_api(request: Request):
     KACHELMANN_KEY = cfg.get("kachelmann_api_key", KACHELMANN_KEY)
     HA_URL = cfg.get("ha_url", "").rstrip("/")
     HA_TOKEN = cfg.get("ha_token", HA_TOKEN)
+    WAKE_GREETING_ENABLED = cfg.get("wake_greeting_enabled", True)
     ai = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
     print(f"[jarvis] Config gespeichert via UI", flush=True)
