@@ -9,6 +9,7 @@ let audioQueue = [];
 let isPlaying = false;
 let audioUnlocked = false;
 let isMuted = false;
+let audioEndTime = 0;
 
 // Mute button functionality
 muteBtn.addEventListener('click', (e) => {
@@ -80,6 +81,7 @@ function queueAudio(base64Audio) {
 function playNext() {
     if (audioQueue.length === 0) {
         isPlaying = false;
+        audioEndTime = Date.now();
         setOrbState('listening');
         status.textContent = '';
         setTimeout(startListening, 1200);
@@ -143,7 +145,7 @@ if (SpeechRecognition) {
     recognition.interimResults = false;
 
     recognition.onresult = (event) => {
-        if (isPlaying) return;
+        if (isPlaying || Date.now() - audioEndTime < 2000) return;
         const last = event.results[event.results.length - 1];
         if (last.isFinal) {
             const text = correctTranscript(last[0].transcript.trim());
