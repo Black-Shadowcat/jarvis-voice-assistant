@@ -24,8 +24,8 @@ Claude Code wird dich nach diesen Keys fragen. Besorge sie vorab:
 | Service | Wo | Pflicht | Kosten |
 |---|---|---|---|
 | **Anthropic** (Claude Haiku) | console.anthropic.com | ✅ | ~$0.25 / 1M Tokens |
-| **ElevenLabs** (Stimme) | elevenlabs.io → My Voices | ✅ | Free: 10k Zeichen/Monat |
-| **Kachelmann** (Wetter) | kachelmannwetter.com/api | ⚡ | Kostenloser Tier verfügbar |
+| **ElevenLabs** (Stimme) | elevenlabs.io → My Voices | ✅ | ab ~5 $/Monat (Starter nötig) |
+| **Kachelmann** (Wetter) | kachelmannwetter.com/api | ⚡ | kostenpflichtig |
 | **Home Assistant** Token | HA → Profil → Long-Lived Access Tokens | ⚡ | Nur wenn HA vorhanden |
 
 > **ElevenLabs Voice ID:** Nach dem Login unter *My Voices* oder *Voice Library* — die ID steht in der URL oder unter Voice Settings.
@@ -97,7 +97,7 @@ Stelle diese Fragen **einzeln**, erkläre kurz wozu der Key dient:
    - Frage nach dem **Namen** der Stimme (z.B. „Felix Serenitas") — für voice.json
 
 4. **Kachelmann Wetter API Key** (Optional — für präzises lokales Wetter)
-   - kachelmannwetter.com/api → kostenloser Account
+   - kachelmannwetter.com/api → Account erstellen (kostenpflichtig)
    - Ohne Key: kein Wetter in der Begrüßung
 
 5. **Home Assistant** (Optional — für Lichtsteuerung, Kalender, Wetterdaten)
