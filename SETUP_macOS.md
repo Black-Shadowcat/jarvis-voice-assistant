@@ -1,318 +1,279 @@
-# JARVIS Setup Guide (macOS)
+# JARVIS Setup (macOS)
 
-Dein persönlicher KI-Assistent — optimiert für macOS.
-
-**Was du bekommst:**
-- `Cmd+Shift+J` → dein komplettes Arbeits-Setup startet automatisch
-- JARVIS begrüßt dich mit Wetter, Aufgaben und Kalender
-- Du sprichst mit JARVIS — er antwortet per Stimme
-- JARVIS steuert deinen Browser (suchen, Seiten öffnen)
-- JARVIS sieht deinen Bildschirm und beschreibt ihn
-- JARVIS schaltet Lichter via Home Assistant
-- JARVIS schreibt Notizen direkt in deine Obsidian Inbox
-- Automatischer Dark/Light Mode passend zur macOS-Systemeinstellung
-- Mic-Mute-Button in der macOS Menüleiste
-- **Config UI** im Browser — alle Einstellungen ohne Texteditor
+Dein persönlicher KI-Sprachassistent — optimiert für macOS.
 
 ---
 
-## Voraussetzungen
+## Empfohlene Vorgehensweise
 
-| Anforderung | Version / Hinweis |
-|---|---|
-| macOS | 14+ (Sonoma oder neuer) |
-| Python | 3.11 via Homebrew |
-| Google Chrome | Aktuell (für Web Speech API) |
-| Claude Code | Installiert (für Setup-Hilfe) |
+**VS Code + Claude Code** ist der schnellste Weg:
+
+1. Repo klonen: `git clone https://github.com/Black-Shadowcat/jarvis-voice-assistant`
+2. Ordner in VS Code öffnen
+3. Claude Code starten (`Cmd+Shift+C` oder Terminal → `claude`)
+4. Tippe: **„Richte Jarvis ein"**
+
+Claude Code liest diese Datei und führt dich interaktiv durch den kompletten Setup.
 
 ---
 
-## Installation
+## Bevor du anfängst — API Keys besorgen
 
-### 1. Homebrew & Python
+Claude Code wird dich nach diesen Keys fragen. Besorge sie vorab:
+
+| Service | Wo | Pflicht | Kosten |
+|---|---|---|---|
+| **Anthropic** (Claude Haiku) | console.anthropic.com | ✅ | ~$0.25 / 1M Tokens |
+| **ElevenLabs** (Stimme) | elevenlabs.io → My Voices | ✅ | Free: 10k Zeichen/Monat |
+| **Kachelmann** (Wetter) | kachelmannwetter.com/api | ⚡ | Kostenloser Tier verfügbar |
+| **Home Assistant** Token | HA → Profil → Long-Lived Access Tokens | ⚡ | Nur wenn HA vorhanden |
+
+> **ElevenLabs Voice ID:** Nach dem Login unter *My Voices* oder *Voice Library* — die ID steht in der URL oder unter Voice Settings.
+
+---
+
+---
+
+# Für Claude Code — Interaktiver Setup-Ablauf
+
+> Du bist Claude Code und der Nutzer hat „Richte Jarvis ein" oder ähnliches gesagt.
+> Führe die folgenden Schritte der Reihe nach aus. Stelle Fragen einzeln, warte auf Antwort, dann weiter.
+> Gib nach jedem Schritt kurzes Feedback was du getan hast.
+
+---
+
+## Schritt 1: Voraussetzungen prüfen
+
+Prüfe und installiere falls nötig:
 
 ```bash
-# Python 3.11 (falls noch nicht installiert)
+# Python 3.11
+/opt/homebrew/bin/python3.11 --version
+
+# Google Chrome
+ls "/Applications/Google Chrome.app" 2>/dev/null && echo "OK" || echo "FEHLT"
+```
+
+Falls Python 3.11 fehlt → installieren:
+```bash
 brew install python@3.11
-
-# Pfad prüfen
-which python3.11
-# → /opt/homebrew/bin/python3.11
 ```
 
-### 2. Dependencies installieren
+Falls Chrome fehlt → den Nutzer bitten Chrome zu installieren (google.com/chrome).
 
-```bash
-pip3.11 install -r requirements.txt
+---
 
-# Playwright Browser
-playwright install chromium
-```
+## Schritt 2: Nutzer-Profil erfragen
 
-> **Hinweis:** `rumps` (für den Mic-Mute Menüleisten-Button) ist ebenfalls in `requirements.txt` enthalten.
+Stelle diese Fragen **einzeln nacheinander**:
 
-### 3. config.json erstellen
+1. **„Wie heißt du?"** → `user_name` (z.B. „Matthias")
+2. **„Wie soll Jarvis dich ansprechen?"** → `user_address` (z.B. „Sir", „Chef", „Boss", „Kapitän")
+3. **„In welcher Stadt wohnst du?"** → `city` (z.B. „Hamburg")
+4. **„Was sind deine GPS-Koordinaten?"** → `lat` / `lon`
+   - Tipp: maps.google.com → rechtsklick auf Standort → Koordinaten kopieren
+   - Oder: „Ich schau das für [Stadt] nach" → du kannst typische Koordinaten vorschlagen
+5. **„Hast du Obsidian? Falls ja, was ist der Pfad zu deiner Inbox?"** → `obsidian_inbox_path`
+   - Typisch: `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/<VaultName>/01 Inbox`
+   - Optional — kann leer bleiben
+
+---
+
+## Schritt 3: API Keys erfragen
+
+Stelle diese Fragen **einzeln**, erkläre kurz wozu der Key dient:
+
+1. **Anthropic API Key** (Pflicht — Jarvis' Gehirn)
+   - Format: beginnt mit `sk-ant-`
+   - Hole ihn: console.anthropic.com → API Keys
+
+2. **ElevenLabs API Key** (Pflicht — Jarvis' Stimme)
+   - Format: beginnt mit `sk_`
+   - Hole ihn: elevenlabs.io → Profile → API Keys
+
+3. **ElevenLabs Voice ID** (Pflicht — welche Stimme)
+   - elevenlabs.io → My Voices → Voice auswählen → ID kopieren
+   - Alternativ: nach dem Start in der Config UI auswählen (dann `YOUR_VOICE_ID` lassen und später setzen)
+   - Frage nach dem **Namen** der Stimme (z.B. „Felix Serenitas") — für voice.json
+
+4. **Kachelmann Wetter API Key** (Optional — für präzises lokales Wetter)
+   - kachelmannwetter.com/api → kostenloser Account
+   - Ohne Key: kein Wetter in der Begrüßung
+
+5. **Home Assistant** (Optional — für Lichtsteuerung, Kalender, Wetterdaten)
+   - **URL**: z.B. `http://10.0.0.190:8123`
+   - **Token**: HA → Profil → ganz unten → Long-Lived Access Tokens → Token erstellen
+
+---
+
+## Schritt 4: config.json erstellen
 
 ```bash
 cp config.example.json config.json
 ```
 
-Bearbeite `config.json` mit deinen Daten. Alle verfügbaren Felder:
+Trage alle gesammelten Werte ein:
 
 ```json
 {
-  "anthropic_api_key": "sk-ant-...",
-  "elevenlabs_api_key": "sk_...",
-  "elevenlabs_voice_id": "rDmv3mOhK6TnhYWckFaD",
-  "user_name": "Matthias",
-  "user_address": "Sir",
-  "city": "Hamburg",
-  "lat": 53.55,
-  "lon": 10.00,
-  "kachelmann_api_key": "...",
-  "ha_url": "http://10.0.0.190:8123",
-  "ha_token": "eyJhbGci...",
+  "anthropic_api_key": "<Anthropic Key>",
+  "elevenlabs_api_key": "<ElevenLabs Key>",
+  "user_name": "<Name>",
+  "user_address": "<Anrede>",
+  "city": "<Stadt>",
+  "lat": <Breitengrad>,
+  "lon": <Längengrad>,
+  "kachelmann_api_key": "<Key oder leer>",
+  "ha_url": "<HA URL oder leer>",
+  "ha_token": "<HA Token oder leer>",
   "ha_enabled": true,
-  "workspace_path": "/Users/matthias/jarvis-voice-assistant",
-  "spotify_track": "spotify:track:...",
-  "browser_url": "https://your-website.com",
-  "obsidian_inbox_path": "/Users/matthias/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vault/01 Inbox/Jarvis",
-  "apps": ["Mail", "Visual Studio Code", "Home Assistant"],
-  "window_layout": {
-    "top_right":    "Visual Studio Code",
-    "bottom_left":  "Mail",
-    "bottom_right": "Home Assistant"
-  }
+  "obsidian_inbox_path": "<Pfad oder leer>",
+  "workspace_path": "<absoluter Pfad zum Projektordner>",
+  "wake_greeting_enabled": true
 }
 ```
 
-| Feld | Pflicht | Beschreibung |
-|---|---|---|
-| `anthropic_api_key` | ✅ | Claude Haiku API Key |
-| `elevenlabs_api_key` | ✅ | ElevenLabs TTS Key |
-| `elevenlabs_voice_id` | ✅ | Voice ID für TTS |
-| `user_name` | ✅ | Dein Name (für Begrüßung) |
-| `user_address` | ✅ | Anrede (z.B. "Sir", "Chef") |
-| `city` | ✅ | Stadt (für Wetteransage) |
-| `lat` / `lon` | ✅ | GPS-Koordinaten (Kachelmann) |
-| `kachelmann_api_key` | ⚡ | Wetter-API (kachelmannwetter.com) |
-| `ha_url` | ⚡ | Home Assistant URL |
-| `ha_token` | ⚡ | HA Long-Lived Access Token |
-| `ha_enabled` | ⚡ | HA-Integration aktiviert (true/false) |
-| `workspace_path` | ✅ | Absoluter Pfad zum Projektordner |
-| `spotify_track` | ⚡ | Spotify Track URI beim Start |
-| `browser_url` | ⚡ | Start-URL im Browser |
-| `obsidian_inbox_path` | ⚡ | Pfad zum Jarvis-Ordner in der Obsidian Inbox |
-| `apps` | ✅ | Apps die beim Start geöffnet werden |
-| `window_layout` | ⚡ | Fenster-Anordnung der 3 konfigurierbaren Quadranten |
-
-✅ = Erforderlich &nbsp; ⚡ = Optional
+> `workspace_path` = absoluter Pfad zum geklonten Ordner, z.B. `/Users/matthias/jarvis-voice-assistant V_2.1`
 
 ---
 
-## Config UI (empfohlen)
-
-Statt `config.json` manuell zu bearbeiten, nutze die eingebaute **Config UI**:
+## Schritt 5: voice.json erstellen
 
 ```bash
-# Server starten (falls nicht läuft)
-python3.11 server.py
+cp voice.example.json voice.json
+```
 
-# Browser öffnen
+Trage die Voice ID und den Namen ein:
+
+```json
+{
+  "active_voice_id": "<Voice ID>",
+  "voices": [
+    {"name": "<Name der Stimme>", "voice_id": "<Voice ID>"}
+  ]
+}
+```
+
+> Falls der Nutzer noch keine Voice ID hat: `YOUR_VOICE_ID` stehen lassen — nach dem Start in der Config UI unter **⚙ Verwalten** ergänzen.
+
+---
+
+## Schritt 6: Dependencies installieren
+
+```bash
+/opt/homebrew/bin/python3.11 -m pip install -r requirements.txt
+/opt/homebrew/bin/python3.11 -m playwright install chromium
+```
+
+---
+
+## Schritt 7: Server testen
+
+```bash
+/opt/homebrew/bin/python3.11 server.py
+```
+
+Prüfe ob der Server läuft:
+```bash
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8340/
+# → 200 = OK
+```
+
+API Keys testen (empfohlen):
+```bash
 open http://localhost:8340/config
+# → Testen-Buttons bei Anthropic und ElevenLabs klicken
 ```
-
-Die Config UI bietet:
-- **API Key Test-Buttons** — prüft Anthropic & ElevenLabs direkt
-- **Voice-Dropdown** — alle verfügbaren ElevenLabs Voices auswählen
-- **Voice Preview** — neue Stimme direkt anhören
-- **Home Assistant Toggle** — HA-Integration ein-/ausschalten
-- **Fenster-Anordnung** — visuelles 2×2 Raster, Quadranten per Dropdown zuweisen
-- **Alle Felder** strukturiert in Karten mit Labels
-- **Sofort wirksam** — nach Speichern kein Server-Neustart nötig
-
-> API Keys werden als Passwortfelder dargestellt (👁 zum Anzeigen). Änderungen werden direkt in `config.json` gespeichert und im laufenden Server übernommen.
 
 ---
 
-## Dark / Light Mode
+## Schritt 8: LaunchAgents prüfen und laden
 
-JARVIS passt sich automatisch der macOS-Systemeinstellung an — kein manuelles Umschalten nötig. Sowohl die Haupt-UI als auch die Config UI reagieren live wenn macOS zwischen Hell und Dunkel wechselt (z.B. im Auto-Modus).
-
----
-
-## Obsidian Integration
-
-JARVIS kann Notizen direkt in deine Obsidian Inbox schreiben, lesen und löschen:
-
-1. Trage den Pfad zu deiner Inbox als `obsidian_inbox_path` in der Config UI ein (z.B. `/Users/matthias/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vault/01 Inbox`)
-2. Fertig — kein Unterordner nötig
-
-| Spracheingabe | Aktion |
-|---|---|
-| „Jarvis, notiere: ..." / „Merke dir: ..." | Neue Notiz schreiben |
-| „Welche Notizen hast du?" / „Was steht in Obsidian?" | Alle Inbox-Notizen lesen und vorlesen |
-| „Markiere als erledigt: Keyword" / „Lösche Notiz: ..." | Notiz per Stichwort löschen |
-| „Lösche alle Notizen" | Alle Inbox-Notizen löschen |
-
-JARVIS erstellt `.md` Dateien mit Datum + Inhalts-Slug als Dateiname (z.B. `2026-05-02 Einkaufen.md`). Obsidian zeigt die Notiz sofort in der Inbox an.
-
-> **Hinweis:** JARVIS weist beim Activate-Greeting automatisch auf offene Inbox-Notizen hin.
-
----
-
-## Starten
-
-### Option A: Hotkey (empfohlen im Alltag)
-
-```
-Cmd + Shift + J
-```
-
-Startet Server, öffnet JARVIS im Chrome App-Modus, alle Apps und arrangiert Fenster.
-
-### Option B: Launch Script
+Die Plist-Dateien müssen auf den korrekten Projektpfad zeigen:
 
 ```bash
-./scripts/launch-session.sh
+# Vorhandene LaunchAgents prüfen
+ls ~/Library/LaunchAgents/com.jarvis.*.plist 2>/dev/null || echo "Keine vorhanden"
 ```
 
-Vollständiger Start mit:
-- FastAPI Server
-- Chrome im App-Modus (via macOS Launch Services, kein Tab/Adressleiste)
-- Konfigurierte Apps in konfigurierten Quadranten
-- Mic-Mute-Button in der Menüleiste
-
-### Option C: Nur Server
+Falls vorhanden — Pfade prüfen und ggf. anpassen. Falls nicht vorhanden — mit dem Nutzer klären ob Auto-Start gewünscht ist.
 
 ```bash
-python3.11 server.py
-# Dann im Browser: http://localhost:8340
-```
+# Laden
+launchctl load ~/Library/LaunchAgents/com.jarvis.server.plist
+launchctl load ~/Library/LaunchAgents/com.jarvis.session.plist
+launchctl load ~/Library/LaunchAgents/com.jarvis.wake.plist
 
----
-
-## macOS Berechtigungen
-
-### Accessibility (Pflicht für Hotkeys)
-
-```
-System Settings → Privacy & Security → Accessibility
-→ Terminal (oder deine App) hinzufügen
-```
-
-### Screen Recording (für "Was siehst du?" Feature)
-
-```
-System Settings → Privacy & Security → Screen Recording
-→ Terminal hinzufügen
-```
-
-### Mic-Mute Menüleisten-Button
-
-`scripts/mic-mute-menubar.py` zeigt ein 🎙️-Symbol in der macOS Menüleiste.  
-Klick → Mikrofon stummschalten/aktivieren.
-
-```bash
-# Manuell starten (wird von launch-session.sh automatisch gestartet)
-python3.11 scripts/mic-mute-menubar.py
-```
-
----
-
-## Launchd Auto-Start
-
-JARVIS startet automatisch bei macOS-Login über zwei launchd-Jobs:
-
-| Plist | Funktion |
-|---|---|
-| `com.jarvis.server.plist` | Server (KeepAlive — startet bei Absturz neu) |
-| `com.jarvis.session.plist` | Session: Chrome + Apps + Fenster (einmalig bei Login) |
-
-Die Session-Plist wartet auf Dock+Finder und schläft 20s — erst dann startet Chrome, damit der GPU-Stack vollständig bereit ist.
-
-```bash
 # Status prüfen
 launchctl list | grep jarvis
-
-# Neu laden (nach Änderung der Plist)
-launchctl unload ~/Library/LaunchAgents/com.jarvis.session.plist
-launchctl load   ~/Library/LaunchAgents/com.jarvis.session.plist
 ```
 
 ---
 
-## Wake-from-Sleep
+## Schritt 9: macOS Berechtigungen
 
-`scripts/wake-monitor.py` überwacht macOS Wake-Events und benachrichtigt JARVIS, wenn der Mac aus dem Ruhezustand aufwacht:
+Erinnere den Nutzer an folgende Berechtigungen in **Systemeinstellungen → Datenschutz & Sicherheit**:
 
-- Lauscht auf System-Log-Events (`log stream`) nach "Wake reason"
-- Wartet 8 Sekunden (bis Netzwerk und Server bereit sind)
-- Ruft `POST /api/wake` am Server auf
-- JARVIS meldet sich automatisch und weist auf offene Obsidian-Notizen hin
+| Berechtigung | Wofür | Pflicht |
+|---|---|---|
+| **Mikrofon** | Spracherkennung im Browser | ✅ |
+| **Bildschirmaufnahme** | „Was siehst du?" Feature | ⚡ |
+| **Bedienungshilfen** | Hotkey `Cmd+Shift+J` | ⚡ |
 
-```bash
-# Manuell starten (wird von launch-session.sh automatisch gestartet)
-python3.11 scripts/wake-monitor.py
-```
-
-Für persistenten Betrieb im Hintergrund: wake-monitor per launchd als eigener Job konfigurieren (analog `com.jarvis.server.plist`).
+Chrome und Terminal jeweils hinzufügen.
 
 ---
 
-## Troubleshooting
+## Abschluss
 
-### Server startet nicht / Port belegt
+Setup fertig! Sage dem Nutzer:
 
-```bash
-lsof -i :8340
-kill <PID>
-python3.11 server.py
-```
+- **`Cmd+Shift+J`** → startet Jarvis komplett (Server + Chrome + Apps)
+- **`http://localhost:8340`** → Jarvis HUD direkt im Browser
+- **`http://localhost:8340/config`** → Config UI (Einstellungen, Voices, Apps)
+- **Server-Log:** `tail -f /tmp/jarvis-server.log`
+- **Jarvis starten:** sag „Jarvis activate"
 
-### Chrome öffnet sich nicht beim Autostart
+---
 
-Der Session-Job wartet auf Dock+Finder. Falls Chrome trotzdem nicht startet:
-```bash
-# Session manuell auslösen
-./scripts/launch-session.sh
+---
 
-# Chrome-Log prüfen
-cat /tmp/jarvis-chrome.log
-```
+# Referenz
 
-### `rumps` nicht gefunden (Mic-Mute Button)
+## Was Jarvis kann
 
-```bash
-pip3.11 install rumps
-```
+- `Cmd+Shift+J` → komplettes Arbeits-Setup startet automatisch
+- Sprachsteuerung auf Deutsch
+- Begrüßung mit Wetter, Aufgaben und Kalender
+- Browser steuern (suchen, Seiten öffnen, Seite vorlesen)
+- Bildschirm analysieren via Claude Vision
+- Lichter steuern via Home Assistant
+- Apple Reminders verwalten (lesen, hinzufügen, abhaken)
+- Notizen direkt in Obsidian Inbox schreiben/lesen/löschen
+- iCloud Mails lesen
+- Kalendertermine via Home Assistant CalDAV
+- Mic-Mute-Button in der macOS Menüleiste
 
-### Config UI nicht erreichbar
+---
 
-```bash
-curl http://localhost:8340   # → HTML wenn OK
-open http://localhost:8340/config
-```
+## Alle Sprach-Actions
 
-### Obsidian Notiz wird nicht erstellt
-
-1. `obsidian_inbox_path` in Config UI prüfen — muss absoluter Pfad sein
-2. Prüfen ob der Ordner existiert: `ls "<pfad>"`
-3. Server-Log: `tail -f /tmp/jarvis-server.log`
-
-### Voice Preview funktioniert nicht
-
-Prüfe den ElevenLabs API Key in der Config UI (Test-Button).
-
-### Screen Capture funktioniert nicht
-
-```
-System Settings → Privacy & Security → Screen Recording → Terminal hinzufügen
-```
-
-### Home Assistant antwortet nicht
-
-Prüfe `ha_url` und `ha_token` in der Config UI. Der HA Token muss ein **Long-Lived Access Token** sein (HA → Profil → Long-Lived Access Tokens).
+| Spracheingabe (Beispiele) | Was passiert |
+|---|---|
+| „Suche nach...", „Was ist..." | DuckDuckGo + erste Seite lesen |
+| „Öffne google.com" | URL im Browser öffnen |
+| „Öffne Mail / VS Code / Obsidian" | macOS App starten |
+| „Was siehst du?", „Schau auf den Bildschirm" | Screenshot + Claude Vision |
+| „Aktuelle Nachrichten" | Weltnachrichten laden |
+| „Erinnere mich an...", „Füge hinzu..." | Apple Reminders Inbox |
+| „Erledigt: Stichwort" | Reminder abhaken |
+| „Was steht an?", „Aufgaben?" | Reminders live laden |
+| „Meine Mails", „Mail von..." | Ungelesene Mails / Inhalt |
+| „Termine heute / diese Woche" | Kalender via Home Assistant |
+| „Licht an", „Wohnzimmer 50%", „Alles aus" | Home Assistant Lichter |
+| „Notiere...", „Merke dir..." | Markdown in Obsidian Inbox |
+| „Welche Notizen hast du?" | Alle Inbox-Notizen vorlesen |
+| „Erledigt: Notiz-Stichwort" | Obsidian Notiz löschen |
 
 ---
 
@@ -320,84 +281,105 @@ Prüfe `ha_url` und `ha_token` in der Config UI. Der HA Token muss ein **Long-Li
 
 ```
 jarvis-voice-assistant/
-├── server.py                    # FastAPI Backend (Haupt-Server)
-├── browser_tools.py             # Playwright Browser-Steuerung
-├── screen_capture.py            # Screenshot + Claude Vision
-├── requirements.txt             # Python Dependencies
-├── config.json                  # Deine Config (gitignored)
-├── config.example.json          # Template mit allen Feldern
+├── server.py              # FastAPI Backend — Hauptlogik
+├── browser_tools.py       # Playwright Browser-Steuerung
+├── screen_capture.py      # Screenshot + Claude Vision
+├── requirements.txt       # Python Dependencies
+├── config.json            # Deine Config (gitignored)
+├── config.example.json    # Template
+├── voice.json             # Deine Voice-Bibliothek (gitignored)
+├── voice.example.json     # Voice Template
+├── version.json           # Versionsnummer (Single Source of Truth)
+├── CLAUDE.md              # Anweisungen für Claude Code
+├── SETUP_macOS.md         # Diese Datei
 ├── frontend/
-│   ├── index.html               # JARVIS Haupt-UI (Orb)
-│   ├── config.html              # Config UI (http://localhost:8340/config)
-│   ├── main.js                  # Speech Recognition + WebSocket
-│   └── style.css                # Dark/Light Theme (CSS custom properties)
+│   ├── index.html         # JARVIS HUD (Hauptansicht)
+│   ├── config.html        # Config UI
+│   ├── config.js          # Config UI Logik
+│   ├── main.js            # Speech Recognition (nicht anfassen!)
+│   └── style.css          # Dark/Light Theme
 └── scripts/
-    ├── launch-session.sh        # Vollständiger Start
-    ├── mic-mute-menubar.py      # Menüleisten Mic-Mute Button
-    └── wake-monitor.py          # Wake-from-Sleep Erkennung → Jarvis benachrichtigen
+    ├── launch-session.sh  # Vollständiger Start
+    ├── mic-mute-menubar.py
+    └── wake-monitor.py    # Wake-from-Sleep → /api/wake
 ```
 
 ---
 
-## Alle Sprach-Actions
+## LaunchAgents
 
-| Action | Trigger-Beispiele | Beschreibung |
-|---|---|---|
-| `SEARCH` | „Suche nach...", „Was ist..." | DuckDuckGo + Seite lesen |
-| `OPEN` | „Öffne...", „Geh zu..." | URL im Browser öffnen |
-| `SCREEN` | „Was siehst du?", „Schau auf..." | Bildschirm analysieren |
-| `NEWS` | „Aktuelle Nachrichten" | Weltnachrichten laden |
-| `REMINDER_ADD` | „Erinnere mich...", „Füge hinzu..." | Apple Reminders Inbox |
-| `REMINDER_DONE` | „Erledigt: ...", „Abhaken..." | Reminder abhaken |
-| `TASKS_LIST` | „Was steht an?", „Aufgaben?" | Reminders live laden |
-| `MAIL_READ` | „Meine Mails", „Mail von..." | Ungelesene Mails / Inhalt |
-| `KALENDER` | „Termine heute/diese Woche" | Kalender via Home Assistant |
-| `LICHT` | „Licht an", „Wohnzimmer 50%" | Home Assistant Lichter |
-| `NOTIZ` | „Notiere...", „Merke dir..." | Markdown-Datei in Obsidian Inbox |
-| `NOTIZ_LIST` | „Welche Notizen?", „Was steht in Obsidian?" | Alle Inbox-Notizen vorlesen |
-| `NOTIZ_ERLEDIGT` | „Erledigt: Keyword", „Lösche Notiz..." | Notiz per Stichwort löschen |
-
----
-
-## API Keys besorgen
-
-| Service | Link | Kosten |
-|---|---|---|
-| Anthropic (Claude) | console.anthropic.com | ~$0.25 / 1M Tokens |
-| ElevenLabs (TTS) | elevenlabs.io | Free: 10k Zeichen/Monat |
-| Kachelmann Wetter | kachelmannwetter.com/api | Kostenloser Tier verfügbar |
-
----
-
-## Commands Übersicht
+| Plist | Funktion |
+|---|---|
+| `com.jarvis.server.plist` | Server KeepAlive (startet bei Absturz neu) |
+| `com.jarvis.session.plist` | Chrome + Apps beim Login (wartet auf Dock+Finder) |
+| `com.jarvis.wake.plist` | Wake-from-Sleep Monitor |
 
 ```bash
-# Server starten
-python3.11 server.py
+# Status
+launchctl list | grep jarvis
 
-# Config UI öffnen
-open http://localhost:8340/config
-
-# Session starten
-./scripts/launch-session.sh
-
-# Mic-Mute Menüleiste
-python3.11 scripts/mic-mute-menubar.py
-
-# Server-Logs prüfen
-tail -f /tmp/jarvis-server.log
-
-# Server neu starten (nach Code-Änderungen)
-pkill -f "server.py"   # launchd KeepAlive startet ihn automatisch neu
+# Neu laden
+launchctl unload ~/Library/LaunchAgents/com.jarvis.server.plist
+launchctl load   ~/Library/LaunchAgents/com.jarvis.server.plist
 ```
 
 ---
 
-## Support
+## Troubleshooting
 
-Bei Problemen:
-1. Config UI: `http://localhost:8340/config` — API Keys testen
-2. Server-Log: `tail -f /tmp/jarvis-server.log`
-3. `config.json` prüfen (keine Kommas am Ende!)
-4. Python-Pfad: `/opt/homebrew/bin/python3.11`
-5. macOS-Berechtigungen: Accessibility, Screen Recording
+**Server startet nicht / Port belegt**
+```bash
+lsof -i :8340
+kill <PID>
+/opt/homebrew/bin/python3.11 server.py
+```
+
+**Jarvis spricht nicht (TTS Fehler)**
+→ ElevenLabs Key in Config UI testen. Voice ID in `voice.json` prüfen.
+
+**Chrome öffnet sich nicht**
+```bash
+./scripts/launch-session.sh
+cat /tmp/jarvis-chrome.log
+```
+
+**Kein Wetter**
+→ Kachelmann API Key fehlt oder ungültig. Ohne Key: kein Wetter.
+
+**Home Assistant antwortet nicht**
+→ `ha_url` und `ha_token` in Config UI prüfen. Token muss Long-Lived Access Token sein.
+
+**Obsidian Notiz wird nicht erstellt**
+→ `obsidian_inbox_path` muss absoluter Pfad sein und der Ordner muss existieren.
+
+**Screen Capture funktioniert nicht**
+→ Systemeinstellungen → Datenschutz → Bildschirmaufnahme → Terminal hinzufügen.
+
+**`rumps` nicht gefunden (Mic-Mute Button)**
+```bash
+/opt/homebrew/bin/python3.11 -m pip install rumps
+```
+
+**Logs**
+```bash
+tail -f /tmp/jarvis-server.log
+```
+
+---
+
+## Nützliche Befehle
+
+```bash
+# Server neu starten (launchd startet automatisch neu)
+pkill -f "server.py"
+
+# Jarvis komplett neu starten
+pkill -f "jarvis-chrome-profile"
+bash "scripts/launch-session.sh"
+
+# Config UI
+open http://localhost:8340/config
+
+# Server-Log
+tail -f /tmp/jarvis-server.log
+```
