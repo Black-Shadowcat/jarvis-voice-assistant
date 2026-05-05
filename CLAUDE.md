@@ -1,26 +1,19 @@
 # CLAUDE.md
 
-Dieses Workspace ist **Jarvis** — ein persoenlicher KI-Assistent mit Sprachsteuerung, Browser-Kontrolle und Doppelklatschen-Trigger.
+Dieses Workspace ist **Jarvis** — ein persoenlicher KI-Assistent mit Sprachsteuerung, Browser-Kontrolle und Cmd+Shift+J Hotkey (macOS).
 
 ---
 
 ## Fuer Claude Code: Setup-Modus
 
-Wenn der Nutzer nach dem Setup fragt oder "Richte Jarvis ein" sagt, folge den Anweisungen in `SETUP.md`. Frage den Nutzer nach seinem Namen, seiner Taetigkeit, und wie er angesprochen werden moechte — diese Infos muessen in den Systemprompt in `server.py` eingetragen werden (ersetze die aktuellen Platzhalter "Julian", "KI-Berater und Automatisierungsexperte", "Sir").
+Wenn der Nutzer nach dem Setup fragt oder "Richte Jarvis ein" sagt, folge den Anweisungen in `SETUP_macOS.md`. Frage den Nutzer nach seinem Namen, seiner Taetigkeit, und wie er angesprochen werden moechte — diese Infos muessen in den Systemprompt in `server.py` eingetragen werden.
 
 **WICHTIG — Pruefe und installiere zuerst alle Voraussetzungen:**
 
-1. **Python**: Pruefe ob Python 3.10+ installiert ist (`python --version`). Falls nicht, installiere es:
-   - Windows: `winget install Python.Python.3.12`
-   - Warte bis die Installation abgeschlossen ist und pruefe erneut
-
-2. **Google Chrome**: Pruefe ob Chrome installiert ist. Falls nicht, weise den Nutzer an Chrome von https://google.com/chrome zu installieren.
-
+1. **Python 3.11**: `/opt/homebrew/bin/python3.11 --version`
+2. **Google Chrome**: Pruefe ob Chrome installiert ist.
 3. **pip Dependencies**: `pip install -r requirements.txt`
-
 4. **Playwright Browser**: `playwright install chromium`
-
-Erst NACHDEM alle Voraussetzungen installiert sind, fahre mit dem Setup in `SETUP.md` fort (API Keys abfragen, config.json erstellen, etc.).
 
 ---
 
@@ -29,7 +22,7 @@ Erst NACHDEM alle Voraussetzungen installiert sind, fahre mit dem Setup in `SETU
 ```
 .
 ├── CLAUDE.md              # This file
-├── SETUP.md               # Setup-Anleitung fuer Claude Code
+├── SETUP_macOS.md         # Setup-Anleitung fuer Claude Code (macOS)
 ├── config.json            # Persoenliche Config (gitignored)
 ├── config.example.json    # Template mit Platzhaltern
 ├── requirements.txt       # Python Dependencies
@@ -37,10 +30,14 @@ Erst NACHDEM alle Voraussetzungen installiert sind, fahre mit dem Setup in `SETU
 ├── browser_tools.py       # Playwright Browser-Steuerung
 ├── screen_capture.py      # Screenshot + Claude Vision
 ├── frontend/
-│   ├── index.html         # Jarvis Web-UI
+│   ├── index.html         # Jarvis Web-UI (Chrome App Mode, port 8340)
+│   ├── dashboard.html     # Dashboard (/dashboard)
+│   ├── config.html        # Config UI (/config)
+│   ├── config.js          # Config UI Logik
 │   ├── main.js            # Speech Recognition + WebSocket + Audio
-│   └── style.css          # Dark Theme mit Orb-Animation
+│   └── style.css          # Dark Theme
 └── scripts/
-    ├── clap-trigger.py    # Doppelklatschen-Erkennung
-    └── launch-session.ps1 # Startet alle Apps + Jarvis
+    ├── launch-session.sh  # Startet Server, Chrome, Mic-Mute Button
+    ├── mic-mute-menubar.py # Mic-Mute in der macOS Menuleiste
+    └── wake-monitor.py    # Wake-from-Sleep → /api/wake
 ```

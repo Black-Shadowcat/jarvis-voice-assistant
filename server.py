@@ -12,6 +12,7 @@ import os
 import random
 import re
 import subprocess
+import threading
 import time
 from typing import Optional, Literal
 from pydantic import BaseModel, Field, ValidationError
@@ -160,6 +161,9 @@ app = FastAPI()
 import browser_tools
 import screen_capture
 
+with open(os.path.join(os.path.dirname(__file__), "version.json")) as _vf:
+    _VERSION_INFO: dict = json.load(_vf)
+
 
 SYMBOL_DE: dict[str, str] = {
     "sunny": "Sonnig",
@@ -241,22 +245,14 @@ def get_weather_sync():
 
 
 def get_tasks_sync():
-    """Read open reminders due today, tomorrow or overdue (no due date included)."""
-    script = '''
-tell application "Reminders"
+    """Read open reminders due today, tomorrow or overdue (no due date = excluded)."""
+    script = '''tell application "Reminders"
     set cutoff to current date
     set hours of cutoff to 23
     set minutes of cutoff to 59
     set seconds of cutoff to 59
     set cutoff to cutoff + (1 * days)
-    set result to {}
-    repeat with r in (every reminder whose completed is false)
-        set dd to due date of r
-        if dd is missing value or dd ≤ cutoff then
-            set end of result to name of r
-        end if
-    end repeat
-    return result
+    get name of (every reminder whose completed is false and due date ≤ cutoff)
 end tell'''
     try:
         r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=30)
@@ -374,7 +370,7 @@ def refresh_data():
     WEATHER_INFO = get_weather_sync()
     TASKS_INFO = get_tasks_sync()
     MAIL_INFO = get_mail_sync()
-    CALENDAR_INFO = get_calendar_sync(days=7)
+    CALENDAR_INFO = get_calendar_sync(days=2)
     print(f"[jarvis] Wetter: {WEATHER_INFO}", flush=True)
     print(f"[jarvis] Tasks: {len(TASKS_INFO)} geladen", flush=True)
     print(f"[jarvis] Mails: {len(MAIL_INFO)} ungelesen", flush=True)
@@ -496,23 +492,37 @@ def extract_action(text: str):
     return text, None
 
 
+def _extract_first_json(text: str) -> Optional[str]:
+    """Extract first balanced JSON object from text, ignoring any trailing content."""
+    depth = 0
+    start = -1
+    for i, ch in enumerate(text):
+        if ch == '{':
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0 and start != -1:
+                return text[start:i + 1]
+    return None
+
+
+def _strip_json_blocks(text: str) -> str:
+    """Remove markdown JSON code blocks from text before speaking."""
+    import re
+    text = re.sub(r'```json.*?```', '', text, flags=re.DOTALL)
+    text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+    return ' '.join(text.split()).strip()
+
+
 def parse_structured_action(reply: str) -> Optional[ActionModel]:
     """Try to parse LLM reply as structured JSON ActionModel. Returns None on any failure."""
     try:
-        text = reply.strip()
-        # Strip markdown code fences if present
-        if text.startswith("```"):
-            lines = text.split("\n")
-            inner = lines[1:] if len(lines) > 1 else lines
-            if inner and inner[-1].strip() == "```":
-                inner = inner[:-1]
-            text = "\n".join(inner).strip()
-        # Find first JSON object in text
-        start = text.find("{")
-        end = text.rfind("}") + 1
-        if start == -1 or end <= start:
+        raw = _extract_first_json(reply)
+        if not raw:
             return None
-        data = json.loads(text[start:end])
+        data = json.loads(raw)
         return ActionModel(**data)
     except ValidationError:
         return None
@@ -567,6 +577,7 @@ async def synthesize_speech(text: str) -> bytes:
 
 
 async def execute_action(action: dict) -> str:
+    global TASKS_INFO
     t = action["type"]
     p = action["payload"]
 
@@ -607,7 +618,6 @@ async def execute_action(action: dict) -> str:
             capture_output=True, text=True, timeout=30
         )
         if result.returncode == 0:
-            global TASKS_INFO
             TASKS_INFO = get_tasks_sync()
             return f"Erinnerung hinzugefügt: {title}"
         return "Fehler beim Hinzufügen der Erinnerung"
@@ -672,26 +682,27 @@ end tell'''
 
     elif t == "REMINDER_DONE":
         keyword = p.replace('"', '').replace("'", "").strip()
-        script = f'''tell application "Reminders"
-    set marked to 0
-    repeat with aList in every list
-        repeat with r in (every reminder in aList whose completed is false)
-            if name of r contains "{keyword}" then
-                set completed of r to true
-                set marked to marked + 1
-            end if
-        end repeat
-    end repeat
-    return marked
-end tell'''
-        result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=30)
-        if result.returncode == 0:
-            count = result.stdout.strip()
-            if count and int(count) > 0:
-                TASKS_INFO = get_tasks_sync()
-                return f"Erinnerung abgehakt: {keyword}"
+
+        # Optimistic update: remove matching items from cache immediately
+        matches = [t for t in TASKS_INFO if keyword.lower() in t.lower()]
+        if not matches:
             return f"Keine Erinnerung mit '{keyword}' gefunden. Bitte genaueres Stichwort aus dem Titel nennen."
-        return f"Fehler beim Abhaken der Erinnerung: {result.stderr.strip()}"
+
+        TASKS_INFO = [t for t in TASKS_INFO if keyword.lower() not in t.lower()]
+
+        # Mark as done in Reminders in background — don't block the response
+        script = f'''tell application "Reminders"
+    set found to (every reminder whose completed is false and name contains "{keyword}")
+    repeat with r in found
+        set completed of r to true
+    end repeat
+end tell'''
+        threading.Thread(
+            target=lambda: subprocess.run(["osascript", "-e", script], timeout=60),
+            daemon=True
+        ).start()
+
+        return f"Erinnerung abgehakt: {', '.join(matches)}"
 
     elif t == "LICHT":
         if not HA_URL or not HA_TOKEN:
@@ -1098,7 +1109,7 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
         return
 
     # ── Fallback: legacy string-based parsing (unchanged)
-    spoken_text, action = extract_action(reply)
+    spoken_text, action = extract_action(_strip_json_blocks(reply))
 
     # ── Activate greeting — no actions allowed, speak and done
     if user_text.lower().startswith("jarvis activate"):
@@ -1563,6 +1574,11 @@ async def preview_elevenlabs_voice(request: Request):
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "frontend")), name="static")
 
 
+@app.get("/api/version")
+async def get_version():
+    return _VERSION_INFO
+
+
 @app.get("/")
 async def serve_index():
     return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "index.html"))
@@ -1584,7 +1600,7 @@ async def startup_and_refresh():
     # Tasks, mail, calendar, obsidian don't need external network — load immediately
     TASKS_INFO = await loop.run_in_executor(None, get_tasks_sync)
     MAIL_INFO = await loop.run_in_executor(None, get_mail_sync)
-    CALENDAR_INFO = await loop.run_in_executor(None, get_calendar_sync)
+    CALENDAR_INFO = await loop.run_in_executor(None, lambda: get_calendar_sync(days=2))
     OBSIDIAN_INFO = await loop.run_in_executor(None, get_obsidian_info_sync)
     print(f"[jarvis] Tasks: {len(TASKS_INFO)} geladen", flush=True)
     print(f"[jarvis] Mails: {len(MAIL_INFO)} ungelesen", flush=True)
@@ -1611,7 +1627,7 @@ async def startup_and_refresh():
         WEATHER_INFO = await loop.run_in_executor(None, get_weather_sync)
         TASKS_INFO = await loop.run_in_executor(None, get_tasks_sync)
         MAIL_INFO = await loop.run_in_executor(None, get_mail_sync)
-        CALENDAR_INFO = await loop.run_in_executor(None, get_calendar_sync)
+        CALENDAR_INFO = await loop.run_in_executor(None, lambda: get_calendar_sync(days=2))
         OBSIDIAN_INFO = await loop.run_in_executor(None, get_obsidian_info_sync)
         print(f"[jarvis] Refresh done: Tasks={len(TASKS_INFO)}, Mails={len(MAIL_INFO)}, Kalender={len(CALENDAR_INFO)}, Obsidian={len(OBSIDIAN_INFO)}", flush=True)
 

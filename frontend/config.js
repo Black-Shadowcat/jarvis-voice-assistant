@@ -1,5 +1,11 @@
 // Load config on page load
-document.addEventListener('DOMContentLoaded', loadConfig);
+document.addEventListener('DOMContentLoaded', () => {
+    loadConfig();
+    fetch('/api/version').then(r => r.json()).then(v => {
+        const el = document.getElementById('app-version');
+        if (el) el.textContent = `v${v.version}`;
+    }).catch(() => {});
+});
 
 let currentConfig = {};
 

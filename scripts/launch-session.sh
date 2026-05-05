@@ -116,8 +116,7 @@ open -na "Google Chrome" --args \
     --app=http://localhost:8340 \
     --autoplay-policy=no-user-gesture-required \
     --user-data-dir="$JARVIS_PROFILE" \
-    --window-size=959,579 \
-    --window-position=0,30 \
+    --start-fullscreen \
     --no-first-run \
     --disable-restore-session-state \
     --no-default-browser-check \
@@ -147,84 +146,8 @@ else
     echo "  → Chrome läuft"
 fi
 
-# 3. Open configured apps
-echo "[3/5] Opening apps..."
-if [[ -n "$PROGRAMS" ]]; then
-    PROGRAM_ARRAY=(${(s:,:)PROGRAMS})
-    for program in "${PROGRAM_ARRAY[@]}"; do
-        echo "  → Opening: $program"
-        open -a "$program" 2>/dev/null || open "/System/Applications/${program}.app" 2>/dev/null
-    done
-else
-    echo "  → No programs configured in Config UI"
-fi
-
-# 4. Arrange windows in 4 equal quadrants
-echo "[4/5] Arranging windows..."
-sleep 3
-/opt/homebrew/bin/python3.11 - <<'PYEOF'
-import json, subprocess, sys
-
-try:
-    with open("config.json") as f:
-        cfg = json.load(f)
-except Exception as e:
-    print(f"  Config lesen fehlgeschlagen: {e}", file=sys.stderr)
-    sys.exit(0)
-
-layout = cfg.get("window_layout", {
-    "top_right":    "Visual Studio Code",
-    "bottom_left":  "Mail",
-    "bottom_right": "Home Assistant",
-})
-
-# AppleScript process name differs from app name for some apps
-PROC = {
-    "Visual Studio Code": "Code",
-}
-
-SLOTS = {
-    "top_right":    (961, 30,  959, 579),
-    "bottom_left":  (0,   611, 959, 580),
-    "bottom_right": (961, 611, 959, 580),
-}
-
-parts = []
-for slot, (x, y, w, h) in SLOTS.items():
-    app = layout.get(slot, "")
-    if not app:
-        continue
-    proc = PROC.get(app, app)
-    parts.append(f"""try
-    tell application "{app}" to activate
-    delay 0.3
-    tell application "System Events" to tell process "{proc}"
-        set size of front window to {{{w}, {h}}}
-        set position of front window to {{{x}, {y}}}
-    end tell
-end try""")
-
-# JARVIS Chrome always top-left, bring to front last
-parts.append("""delay 0.5
-try
-    tell application "System Events"
-        set jarvisProcs to (every process whose name is "Google Chrome" and (exists window 1))
-        repeat with p in jarvisProcs
-            try
-                set frontmost of p to true
-            end try
-        end repeat
-    end tell
-end try""")
-
-r = subprocess.run(["osascript"], input="\n".join(parts), text=True, capture_output=True)
-if r.returncode != 0:
-    print(f"  AppleScript: {r.stderr[:200]}", file=sys.stderr)
-PYEOF
-echo "  → Windows arranged"
-
-# 5. Start mic mute menu bar button
-echo "[5/5] Starting mic mute button..."
+# 3. Start mic mute menu bar button
+echo "[3/3] Starting mic mute button..."
 if ! pgrep -f "mic-mute-menubar.py" > /dev/null; then
     nohup /opt/homebrew/bin/python3.11 "$SCRIPT_DIR/mic-mute-menubar.py" > /tmp/mic-mute.log 2>&1 &
     echo "  → Mic mute button started"
