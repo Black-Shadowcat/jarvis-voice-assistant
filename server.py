@@ -1435,6 +1435,11 @@ async def serve_config():
     return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "config.html"))
 
 
+@app.get("/handbuch")
+async def serve_handbuch():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "handbuch.html"))
+
+
 @app.get("/api/config")
 async def get_config_api():
     with open(CONFIG_PATH, "r") as f:
