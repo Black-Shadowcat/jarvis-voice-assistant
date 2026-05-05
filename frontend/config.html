@@ -1,693 +1,590 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
-    <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
-    <meta name="color-scheme" content="dark light">
-    <title>J.A.R.V.I.S. — Config</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S. — Einstellungen</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%230a0e27' stroke='%2300aaff' stroke-width='2'/><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' fill='%2300aaff' font-size='10' font-family='monospace'>J</text></svg>">
 
-    <script>
-        tailwind = { config: {
-            theme: { extend: { colors: {
-                'j-bg':   '#0a0a0f',
-                'j-card': '#0d1b2a',
-                'j-blue': '#2a6cb8',
-                'j-blue-dim': '#1a3a5c',
-                'j-gold': '#c9a227',
-                'j-green': '#27c96a',
-                'j-text': '#e0e0e0',
-                'j-muted': '#888',
-                'j-dim':  '#3a3a4a',
-            }}}
-        }}
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
 
-    <style>
-        body { background: #0a0a0f; }
-
-        .card {
-            background: linear-gradient(145deg, #0d1b2a 0%, #080f1a 100%);
-            border: 1px solid rgba(42, 108, 184, 0.18);
-            box-shadow: 0 4px 24px rgba(0,0,0,0.4);
-        }
-
-        .field {
-            background: #060d18;
-            border: 1px solid rgba(42, 108, 184, 0.22);
-            color: #e0e0e0;
-            border-radius: 0.5rem;
-            padding: 0.625rem 0.75rem;
-            font-size: 0.875rem;
-            width: 100%;
-            transition: border-color 0.15s, box-shadow 0.15s;
-        }
-        .field:focus {
-            outline: none;
-            border-color: rgba(42, 108, 184, 0.6);
-            box-shadow: 0 0 0 3px rgba(42, 108, 184, 0.12);
-        }
-        .field::placeholder { color: #3a3a5a; }
-        select.field option { background: #0d1b2a; }
-
-        .label {
-            display: block;
-            font-size: 0.7rem;
-            letter-spacing: 0.1em;
-            color: #666;
-            margin-bottom: 0.4rem;
-            text-transform: uppercase;
-        }
-
-        .btn-test {
-            padding: 0.625rem 1rem;
-            border-radius: 0.5rem;
-            border: 1px solid rgba(42,108,184,0.3);
-            color: #666;
-            font-size: 0.75rem;
-            font-weight: 500;
-            white-space: nowrap;
-            transition: all 0.15s;
-            background: transparent;
-            cursor: pointer;
-        }
-        .btn-test:hover:not(:disabled) { border-color: #2a6cb8; color: #4a9eff; }
-        .btn-test:disabled { opacity: 0.5; cursor: default; }
-        .btn-test.ok  { border-color: #27c96a; color: #27c96a; background: rgba(39,201,106,0.08); }
-        .btn-test.err { border-color: #e05252; color: #e05252; background: rgba(224,82,82,0.08); }
-
-        .btn-save {
-            padding: 0.625rem 1.5rem;
-            border-radius: 0.5rem;
-            background: #c9a227;
-            color: #0a0a0f;
-            font-size: 0.875rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: background 0.15s;
-            border: none;
-        }
-        .btn-save:hover:not(:disabled) { background: #d4ae35; }
-        .btn-save:disabled { opacity: 0.5; cursor: default; }
-
-        .btn-reset {
-            padding: 0.625rem 1.25rem;
-            border-radius: 0.5rem;
-            border: 1px solid rgba(42,108,184,0.25);
-            color: #666;
-            font-size: 0.875rem;
-            cursor: pointer;
-            background: transparent;
-            transition: all 0.15s;
-        }
-        .btn-reset:hover { border-color: #2a6cb8; color: #4a9eff; }
-
-        .app-chip {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.6rem 0.875rem;
-            border-radius: 0.5rem;
-            border: 1px solid rgba(42,108,184,0.18);
-            font-size: 0.8rem;
-            color: #555;
-            cursor: pointer;
-            transition: all 0.15s;
-            background: transparent;
-            text-align: left;
-        }
-        .app-chip:hover { border-color: rgba(42,108,184,0.4); color: #888; }
-        .app-chip.active { border-color: #2a6cb8; color: #e0e0e0; background: rgba(42,108,184,0.1); }
-
-        .toggle-track {
-            position: relative; display: inline-flex;
-            width: 44px; height: 24px;
-            border-radius: 999px;
-            background: #1a2535;
-            border: 1px solid rgba(42,108,184,0.2);
-            cursor: pointer; transition: background 0.2s;
-        }
-        .toggle-track.on { background: #2a6cb8; border-color: #2a6cb8; }
-        .toggle-thumb {
-            position: absolute; top: 3px; left: 3px;
-            width: 16px; height: 16px;
-            border-radius: 50%; background: #e0e0e0;
-            transition: transform 0.2s;
-        }
-        .toggle-track.on .toggle-thumb { transform: translateX(20px); }
-
-        .eye-btn {
-            position: absolute; right: 0.625rem; top: 50%;
-            transform: translateY(-50%);
-            color: #3a3a5a; font-size: 0.8rem;
-            cursor: pointer; background: none; border: none;
-            padding: 0.2rem;
-        }
-        .eye-btn:hover { color: #666; }
-
-        .toast {
-            position: fixed; top: 1.25rem; right: 1.25rem; z-index: 100;
-            padding: 0.75rem 1.25rem;
-            border-radius: 0.5rem;
-            background: #0d1b2a;
-            font-size: 0.85rem;
-            color: #e0e0e0;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            border-left: 3px solid #2a6cb8;
-            pointer-events: none;
-        }
-        .toast.success { border-color: #27c96a; }
-        .toast.error   { border-color: #e05252; }
-        .toast.info    { border-color: #2a6cb8; }
-
-        [x-cloak] { display: none; }
-        .spin { display: inline-block; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(42,108,184,0.2); border-radius: 2px; }
-
-        /* ── Window Layout Grid ── */
-        .layout-grid { background: rgba(42,108,184,0.25); }
-        .layout-cell { background: #0d1b2a; }
-        .layout-cell-fixed { background: #060f1c; }
-
-        /* ── Light Mode ── */
-        @media (prefers-color-scheme: light) {
-            body { background: #f5f5f7; color: #1d1d1f; }
-
-            /* Tailwind custom-color overrides */
-            .text-j-text  { color: #1d1d1f !important; }
-            .text-j-muted { color: #6e6e73 !important; }
-            .text-j-dim   { color: #8e8e93 !important; }
-
-            .card {
-                background: linear-gradient(145deg, #ffffff 0%, #f4f6f9 100%);
-                border-color: rgba(42,108,184,0.15);
-                box-shadow: 0 4px 24px rgba(0,0,0,0.07);
-            }
-
-            .field {
-                background: #ffffff;
-                border-color: rgba(42,108,184,0.28);
-                color: #1d1d1f;
-            }
-            .field:focus { box-shadow: 0 0 0 3px rgba(42,108,184,0.1); }
-            .field::placeholder { color: #b0b0b8; }
-            select.field option { background: #ffffff; }
-
-            .label { color: #6e6e73; }
-
-            .btn-test { color: #6e6e73; }
-            .btn-test:hover:not(:disabled) { color: #0055b3; }
-            .btn-reset { color: #6e6e73; }
-            .btn-reset:hover { color: #0055b3; }
-
-            .app-chip { color: #888; }
-            .app-chip:hover { color: #555; }
-            .app-chip.active { color: #1d1d1f; }
-
-            .toggle-track { background: #d1d5db; border-color: #c0c4cb; }
-            .toggle-track.on { background: #2a6cb8; border-color: #2a6cb8; }
-            .toggle-thumb { background: #ffffff; }
-
-            .eye-btn { color: #aaa; }
-            .eye-btn:hover { color: #6e6e73; }
-
-            .toast {
-                background: #ffffff;
-                color: #1d1d1f;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.12);
-            }
-
-            ::-webkit-scrollbar-thumb { background: rgba(42,108,184,0.15); }
-
-            .layout-grid { background: rgba(42,108,184,0.15); }
-            .layout-cell { background: #f4f7fc; }
-            .layout-cell-fixed { background: #e8eef8; }
-        }
-    </style>
-</head>
-<body class="text-j-text min-h-screen">
-
-<div x-data="configApp()" x-init="init()" x-cloak>
-
-    <!-- Restart confirm modal -->
-    <div x-show="showRestartConfirm"
-         class="fixed inset-0 flex items-center justify-center z-50"
-         style="background: rgba(0,0,0,0.75)">
-        <div class="card rounded-2xl p-7 w-full max-w-sm mx-4">
-            <h3 class="text-sm font-semibold tracking-widest uppercase text-j-gold mb-3">Server neu starten?</h3>
-            <p class="text-j-muted text-sm mb-6">Der laufende Server-Prozess wird beendet. launchd startet ihn automatisch neu. Jarvis ist für ca. 10–15 Sekunden nicht erreichbar.</p>
-            <div class="flex gap-3 justify-end">
-                <button class="btn-reset" @click="showRestartConfirm = false">Abbrechen</button>
-                <button class="btn-test err" style="padding: 0.625rem 1.25rem; font-size: 0.875rem;"
-                        @click="restart()">⟳ Neu starten</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Restarting overlay -->
-    <div x-show="restarting"
-         class="fixed inset-0 flex items-center justify-center z-50"
-         style="background: rgba(0,0,0,0.85)">
-        <p style="color: #e05252; font-size: 1.1rem; letter-spacing: 0.12em; font-weight: 300;">
-            ⟳ &nbsp;Server wird neu gestartet…
-        </p>
-    </div>
-
-    <!-- Toast -->
-    <div x-show="toast.show"
-         x-transition:enter="transition ease-out duration-200"
-         x-transition:enter-start="opacity-0 translate-x-4"
-         x-transition:enter-end="opacity-100 translate-x-0"
-         x-transition:leave="transition ease-in duration-150"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"
-         :class="'toast ' + toast.type"
-         x-text="toast.message">
-    </div>
-
-    <div class="max-w-3xl mx-auto px-4 py-10">
-
-        <!-- Header -->
-        <div class="text-center mb-10">
-            <a href="/" class="inline-block mb-6 opacity-40 hover:opacity-70 transition-opacity text-xs tracking-widest text-j-muted">← ZURÜCK ZU JARVIS</a>
-            <h1 class="text-2xl font-light tracking-[0.3em] text-j-blue mb-1">J.A.R.V.I.S.</h1>
-            <p class="text-xs tracking-[0.25em] text-j-dim uppercase">Konfiguration</p>
-        </div>
-
-        <!-- ── API KEYS ── -->
-        <div class="card rounded-2xl p-6 mb-4">
-            <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-6">API Keys &amp; Services</h2>
-
-            <!-- Anthropic -->
-            <div class="mb-5">
-                <label class="label">Anthropic API Key</label>
-                <div class="flex gap-2">
-                    <div class="relative flex-1">
-                        <input :type="show.anthropic ? 'text' : 'password'"
-                               x-model="cfg.anthropic_api_key"
-                               class="field pr-9 font-mono"
-                               placeholder="sk-ant-api03-…">
-                        <button class="eye-btn" @click="show.anthropic = !show.anthropic"
-                                :title="show.anthropic ? 'Verbergen' : 'Anzeigen'">
-                            <span x-text="show.anthropic ? '🙈' : '👁'"></span>
-                        </button>
-                    </div>
-                    <button class="btn-test"
-                            :class="{ ok: test.anthropic==='ok', err: test.anthropic==='err' }"
-                            :disabled="test.anthropic==='loading'"
-                            @click="testKey('anthropic')">
-                        <span x-show="test.anthropic==='loading'" class="spin">↻</span>
-                        <span x-show="test.anthropic!=='loading'"
-                              x-text="test.anthropic==='ok' ? '✓ OK' : test.anthropic==='err' ? '✗ Fehler' : 'Testen'"></span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- ElevenLabs Key -->
-            <div class="mb-5">
-                <label class="label">ElevenLabs API Key</label>
-                <div class="flex gap-2">
-                    <div class="relative flex-1">
-                        <input :type="show.elevenlabs ? 'text' : 'password'"
-                               x-model="cfg.elevenlabs_api_key"
-                               class="field pr-9 font-mono"
-                               placeholder="sk_…">
-                        <button class="eye-btn" @click="show.elevenlabs = !show.elevenlabs">
-                            <span x-text="show.elevenlabs ? '🙈' : '👁'"></span>
-                        </button>
-                    </div>
-                    <button class="btn-test"
-                            :class="{ ok: test.elevenlabs==='ok', err: test.elevenlabs==='err' }"
-                            :disabled="test.elevenlabs==='loading'"
-                            @click="testKey('elevenlabs')">
-                        <span x-show="test.elevenlabs==='loading'" class="spin">↻</span>
-                        <span x-show="test.elevenlabs!=='loading'"
-                              x-text="test.elevenlabs==='ok' ? '✓ OK' : test.elevenlabs==='err' ? '✗ Fehler' : 'Testen'"></span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Voice -->
-            <div>
-                <label class="label">ElevenLabs Voice</label>
-                <div class="flex gap-2">
-                    <select x-model="cfg.elevenlabs_voice_id" class="field flex-1">
-                        <option value="">— Voice auswählen —</option>
-                        <template x-for="v in voices" :key="v.id">
-                            <option :value="v.id"
-                                    :selected="v.id === cfg.elevenlabs_voice_id"
-                                    x-text="v.name + (v.language ? '  (' + v.language + ')' : '')">
-                            </option>
-                        </template>
-                    </select>
-                    <button class="btn-test" @click="previewVoice()" :disabled="previewing">
-                        <span x-show="previewing" class="spin">↻</span>
-                        <span x-show="!previewing">▶ Preview</span>
-                    </button>
-                </div>
-                <p class="mt-1.5 text-xs" :class="voices.length ? 'text-j-dim' : 'text-[#3a3a5a]'"
-                   x-text="voices.length ? voices.length + ' Voices geladen' : 'Voices werden geladen…'"></p>
-            </div>
-        </div>
-
-        <!-- ── USER PROFILE ── -->
-        <div class="card rounded-2xl p-6 mb-4">
-            <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-6">Nutzer-Profil</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="label">Name</label>
-                    <input x-model="cfg.user_name" type="text" class="field" placeholder="Matthias">
-                </div>
-                <div>
-                    <label class="label">Anrede (z.B. Sir, Chef, Herr X)</label>
-                    <input x-model="cfg.user_address" type="text" class="field" placeholder="Sir">
-                </div>
-                <div>
-                    <label class="label">Stadt</label>
-                    <input x-model="cfg.city" type="text" class="field" placeholder="Hamburg">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="label">Breitengrad</label>
-                        <input x-model.number="cfg.lat" type="number" step="0.0001" class="field" placeholder="53.55">
-                    </div>
-                    <div>
-                        <label class="label">Längengrad</label>
-                        <input x-model.number="cfg.lon" type="number" step="0.0001" class="field" placeholder="10.00">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ── HOME ASSISTANT ── -->
-        <div class="card rounded-2xl p-6 mb-4">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold">Home Assistant</h2>
-                <div class="toggle-track" :class="{ on: cfg.ha_enabled }" @click="cfg.ha_enabled = !cfg.ha_enabled">
-                    <div class="toggle-thumb"></div>
-                </div>
-            </div>
-            <div :class="cfg.ha_enabled ? 'opacity-100' : 'opacity-30 pointer-events-none'"
-                 class="space-y-4 transition-opacity duration-200">
-                <div>
-                    <label class="label">Home Assistant URL</label>
-                    <input x-model="cfg.ha_url" type="text" class="field" placeholder="http://10.0.0.190:8123">
-                </div>
-                <div>
-                    <label class="label">Long-Lived Access Token</label>
-                    <div class="relative">
-                        <input :type="show.hatoken ? 'text' : 'password'"
-                               x-model="cfg.ha_token"
-                               class="field pr-9 font-mono"
-                               placeholder="eyJhbGci…">
-                        <button class="eye-btn" @click="show.hatoken = !show.hatoken">
-                            <span x-text="show.hatoken ? '🙈' : '👁'"></span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ── PFADE & DIENSTE ── -->
-        <div class="card rounded-2xl p-6 mb-4">
-            <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-6">Pfade &amp; Dienste</h2>
-            <div class="space-y-4">
-                <div>
-                    <label class="label">Kachelmann Wetter API Key</label>
-                    <div class="relative">
-                        <input :type="show.kachelmann ? 'text' : 'password'"
-                               x-model="cfg.kachelmann_api_key"
-                               class="field pr-9 font-mono"
-                               placeholder="ZNkF…">
-                        <button class="eye-btn" @click="show.kachelmann = !show.kachelmann">
-                            <span x-text="show.kachelmann ? '🙈' : '👁'"></span>
-                        </button>
-                    </div>
-                </div>
-                <div>
-                    <label class="label">Workspace Pfad</label>
-                    <input x-model="cfg.workspace_path" type="text" class="field font-mono"
-                           placeholder="/Users/matthias/jarvis-voice-assistant">
-                </div>
-                <div>
-                    <label class="label">Obsidian Inbox Pfad</label>
-                    <input x-model="cfg.obsidian_inbox_path" type="text" class="field font-mono"
-                           placeholder="/Users/matthias/Obsidian/Inbox">
-                </div>
-                <div>
-                    <label class="label">Browser Start-URL</label>
-                    <input x-model="cfg.browser_url" type="text" class="field"
-                           placeholder="https://google.com">
-                </div>
-                <div>
-                    <label class="label">Spotify Track URI</label>
-                    <input x-model="cfg.spotify_track" type="text" class="field font-mono"
-                           placeholder="spotify:track:…">
-                </div>
-            </div>
-        </div>
-
-        <!-- ── VERHALTEN ── -->
-        <div class="card rounded-2xl p-6 mb-4">
-            <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-6">Verhalten</h2>
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm text-j-text">Begrüßung nach Standby</p>
-                    <p class="text-xs text-j-muted mt-0.5">Jarvis meldet sich automatisch beim Aufwachen aus dem Schlafmodus</p>
-                </div>
-                <div class="toggle-track ml-6 flex-shrink-0" :class="{ on: cfg.wake_greeting_enabled }"
-                     @click="cfg.wake_greeting_enabled = !cfg.wake_greeting_enabled">
-                    <div class="toggle-thumb"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ── APPS ── -->
-        <div class="card rounded-2xl p-6 mb-8">
-            <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-6">Apps beim Start öffnen</h2>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <template x-for="app in allApps" :key="app">
-                    <button class="app-chip"
-                            :class="{ active: hasApp(app) }"
-                            @click="toggleApp(app)">
-                        <span x-text="hasApp(app) ? '☑' : '☐'" class="text-base leading-none flex-shrink-0"></span>
-                        <span x-text="app" class="truncate"></span>
-                    </button>
-                </template>
-            </div>
-        </div>
-
-        <!-- ── WINDOW LAYOUT ── -->
-        <div class="card rounded-2xl p-6 mb-8">
-            <h2 class="text-xs font-semibold tracking-widest uppercase text-j-gold mb-1">Fenster-Anordnung</h2>
-            <p class="text-[0.7rem] text-j-muted mb-5">Entspricht den 4 Quadranten auf deinem Bildschirm. JARVIS ist immer oben links.</p>
-            <div class="layout-grid grid grid-cols-2 gap-[1px] rounded-xl overflow-hidden text-xs">
-
-                <!-- top-left: JARVIS (fest) -->
-                <div class="layout-cell-fixed flex items-center justify-center min-h-[80px]">
-                    <span class="font-semibold tracking-[0.2em] text-j-blue">JARVIS</span>
-                </div>
-
-                <!-- top-right -->
-                <div class="layout-cell flex items-center p-3 min-h-[80px]">
-                    <select x-model="cfg.window_layout.top_right" class="field text-xs">
-                        <option value="">— leer —</option>
-                        <template x-for="app in allApps" :key="app">
-                            <option :value="app" x-text="app"></option>
-                        </template>
-                    </select>
-                </div>
-
-                <!-- bottom-left -->
-                <div class="layout-cell flex items-center p-3 min-h-[80px]">
-                    <select x-model="cfg.window_layout.bottom_left" class="field text-xs">
-                        <option value="">— leer —</option>
-                        <template x-for="app in allApps" :key="app">
-                            <option :value="app" x-text="app"></option>
-                        </template>
-                    </select>
-                </div>
-
-                <!-- bottom-right -->
-                <div class="layout-cell flex items-center p-3 min-h-[80px]">
-                    <select x-model="cfg.window_layout.bottom_right" class="field text-xs">
-                        <option value="">— leer —</option>
-                        <template x-for="app in allApps" :key="app">
-                            <option :value="app" x-text="app"></option>
-                        </template>
-                    </select>
-                </div>
-
-            </div>
-        </div>
-
-        <!-- ── FOOTER BUTTONS ── -->
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-5">
-                <a href="/" class="text-xs text-j-dim hover:text-j-muted transition-colors">← Zurück zu Jarvis</a>
-                <button class="btn-test" style="font-size: 0.75rem; padding: 0.4rem 0.875rem; color: #744;"
-                        @click="showRestartConfirm = true">⟳ Neu starten</button>
-            </div>
-            <div class="flex gap-3">
-                <button class="btn-reset" @click="reset()">↻ Zurücksetzen</button>
-                <button class="btn-save" @click="save()" :disabled="saving">
-                    <span x-show="saving" class="spin mr-1">↻</span>
-                    💾 Speichern
-                </button>
-            </div>
-        </div>
-
-    </div><!-- /container -->
-</div><!-- /x-data -->
-
-<script>
-function configApp() {
-    return {
-        cfg: {},
-        voices: [],
-        allApps: ['Mail', 'Safari', 'Visual Studio Code', 'Music', 'Home Assistant', 'Spotify', 'Obsidian'],
-        toast: { show: false, type: 'info', message: '' },
-        test: { anthropic: null, elevenlabs: null },
-        show: { anthropic: false, elevenlabs: false, hatoken: false, kachelmann: false },
-        saving: false,
-        previewing: false,
-        showRestartConfirm: false,
-        restarting: false,
-        _toastTimer: null,
-
-        async init() {
-            await this.loadConfig();
-            this.loadVoices();
-        },
-
-        async loadConfig() {
-            try {
-                const r = await fetch('/api/config');
-                const data = await r.json();
-                if (data.ha_enabled === undefined) data.ha_enabled = !!(data.ha_url);
-                if (data.wake_greeting_enabled === undefined) data.wake_greeting_enabled = true;
-                if (!data.window_layout) data.window_layout = {
-                    top_right: 'Visual Studio Code',
-                    bottom_left: 'Mail',
-                    bottom_right: 'Home Assistant'
-                };
-                this.cfg = data;
-            } catch (e) {
-                this.showToast('error', 'Fehler beim Laden der Konfiguration');
-            }
-        },
-
-        async loadVoices() {
-            try {
-                const r = await fetch('/api/elevenlabs/voices');
-                if (r.ok) this.voices = await r.json();
-            } catch (e) {}
-        },
-
-        hasApp(name) { return (this.cfg.apps || []).includes(name); },
-
-        toggleApp(name) {
-            const apps = this.cfg.apps || [];
-            this.cfg.apps = apps.includes(name)
-                ? apps.filter(a => a !== name)
-                : [...apps, name];
-        },
-
-        async save() {
-            this.saving = true;
-            try {
-                const r = await fetch('/api/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.cfg),
-                });
-                const result = await r.json();
-                if (result.status === 'saved') {
-                    const warn = result.errors?.length ? `  (${result.errors.length} Warnung)` : '';
-                    this.showToast('success', '✓ Einstellungen gespeichert' + warn);
-                } else {
-                    this.showToast('error', 'Speichern fehlgeschlagen');
-                }
-            } catch (e) {
-                this.showToast('error', 'Netzwerkfehler beim Speichern');
-            }
-            this.saving = false;
-        },
-
-        async reset() {
-            await this.loadConfig();
-            await this.loadVoices();
-            this.showToast('info', 'Auf gespeicherte Werte zurückgesetzt');
-        },
-
-        async testKey(type) {
-            this.test = { ...this.test, [type]: 'loading' };
-            const api_key = type === 'anthropic'
-                ? this.cfg.anthropic_api_key
-                : this.cfg.elevenlabs_api_key;
-            try {
-                const r = await fetch(`/api/test/${type}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ api_key }),
-                });
-                const result = await r.json();
-                const state = result.valid ? 'ok' : 'err';
-                this.test = { ...this.test, [type]: state };
-                this.showToast(result.valid ? 'success' : 'error', result.message);
-                setTimeout(() => { this.test = { ...this.test, [type]: null }; }, 5000);
-            } catch (e) {
-                this.test = { ...this.test, [type]: 'err' };
-                this.showToast('error', 'Verbindungsfehler');
-            }
-        },
-
-        async previewVoice() {
-            if (!this.cfg.elevenlabs_voice_id) {
-                this.showToast('error', 'Bitte zuerst eine Voice auswählen');
-                return;
-            }
-            this.previewing = true;
-            try {
-                const r = await fetch('/api/elevenlabs/preview', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ voice_id: this.cfg.elevenlabs_voice_id }),
-                });
-                if (r.ok) {
-                    const blob = await r.blob();
-                    const audio = new Audio(URL.createObjectURL(blob));
-                    audio.play();
-                } else {
-                    this.showToast('error', 'Preview fehlgeschlagen');
-                }
-            } catch (e) {
-                this.showToast('error', 'Fehler beim Audio-Preview');
-            }
-            this.previewing = false;
-        },
-
-        async restart() {
-            this.showRestartConfirm = false;
-            this.restarting = true;
-            try { await fetch('/api/restart', { method: 'POST' }); } catch (e) {}
-            setTimeout(() => { window.location.href = '/config'; }, 5000);
-        },
-
-        showToast(type, message) {
-            clearTimeout(this._toastTimer);
-            this.toast = { show: true, type, message };
-            this._toastTimer = setTimeout(() => { this.toast.show = false; }, 5000);
-        },
-    };
+body {
+    background:#0a0e27;
+    color:#e0e0e0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    padding:20px;
+    min-height:100vh;
 }
-</script>
+
+.container {
+    max-width:900px;
+    margin:0 auto;
+}
+
+/* ── Header ── */
+.header {
+    text-align:center;
+    margin-bottom:40px;
+}
+
+.header-link {
+    display:inline-block;
+    margin-bottom:16px;
+    font-size:0.75rem;
+    letter-spacing:.08em;
+    color:#2a9ee2;
+    text-decoration:none;
+    opacity:0.6;
+    transition:opacity 0.2s;
+}
+.header-link:hover { opacity:1; }
+
+.header h1 {
+    font-size:1.8rem;
+    letter-spacing:.15em;
+    color:#2a9ee2;
+    margin-bottom:8px;
+    font-weight:300;
+}
+
+.header-sub {
+    font-size:0.75rem;
+    letter-spacing:.08em;
+    color:#555;
+    text-transform:uppercase;
+}
+
+/* ── Panel/Card ── */
+.panel {
+    background:rgba(13,27,42,0.6);
+    border:1px solid rgba(42,158,226,0.15);
+    border-radius:10px;
+    padding:18px;
+    margin-bottom:16px;
+    backdrop-filter:blur(6px);
+}
+
+.panel-title {
+    font-size:0.8rem;
+    letter-spacing:.08em;
+    color:#2a9ee2;
+    text-transform:uppercase;
+    margin-bottom:16px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+/* ── Form Fields ── */
+.field-group {
+    margin-bottom:14px;
+}
+
+.label {
+    display:block;
+    font-size:0.75rem;
+    letter-spacing:.08em;
+    color:#888;
+    text-transform:uppercase;
+    margin-bottom:6px;
+}
+
+input, select {
+    width:100%;
+    background:rgba(6,13,24,0.8);
+    border:1px solid rgba(42,158,226,0.2);
+    color:#e0e0e0;
+    padding:10px 12px;
+    border-radius:6px;
+    font-size:0.85rem;
+    font-family:inherit;
+    outline:none;
+    transition:border-color 0.2s;
+}
+
+input:focus, select:focus {
+    border-color:rgba(42,158,226,0.5);
+    box-shadow:0 0 0 2px rgba(42,158,226,0.1);
+}
+
+input::placeholder { color:#3a3a5a; }
+input[type="password"] { font-family:monospace; }
+
+/* ── Inline Field Row ── */
+.field-row {
+    display:flex;
+    gap:8px;
+}
+
+.field-row input, .field-row select {
+    flex:1;
+}
+
+.field-row-action {
+    flex-shrink:0;
+    padding:10px 12px;
+    background:rgba(42,158,226,0.15);
+    border:1px solid rgba(42,158,226,0.3);
+    color:#2a9ee2;
+    border-radius:6px;
+    font-size:0.8rem;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:all 0.2s;
+}
+
+.field-row-action:hover {
+    background:rgba(42,158,226,0.25);
+}
+
+.field-row-action:disabled {
+    opacity:0.5;
+    cursor:default;
+}
+
+.field-row-action.ok {
+    border-color:#4cbf7e;
+    color:#4cbf7e;
+    background:rgba(76,191,126,0.08);
+}
+
+.field-row-action.err {
+    border-color:#e05252;
+    color:#e05252;
+    background:rgba(224,82,82,0.08);
+}
+
+/* ── Grid Layout ── */
+.field-grid {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+}
+
+@media (max-width:600px) {
+    .field-grid { grid-template-columns:1fr; }
+}
+
+/* ── Toggles ── */
+.toggle-row {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:12px;
+    background:rgba(42,158,226,0.04);
+    border-radius:6px;
+}
+
+.toggle-row-label {
+    flex:1;
+}
+
+.toggle-row-label .text {
+    font-size:0.9rem;
+    margin-bottom:4px;
+}
+
+.toggle-row-label .sub {
+    font-size:0.75rem;
+    color:#888;
+}
+
+.toggle {
+    width:44px;
+    height:24px;
+    background:#1a2535;
+    border:1px solid rgba(42,158,226,0.2);
+    border-radius:999px;
+    cursor:pointer;
+    position:relative;
+    transition:background 0.2s;
+    flex-shrink:0;
+}
+
+.toggle.on {
+    background:#2a9ee2;
+    border-color:#2a9ee2;
+}
+
+.toggle::after {
+    content:'';
+    position:absolute;
+    top:3px;
+    left:3px;
+    width:16px;
+    height:16px;
+    background:#e0e0e0;
+    border-radius:50%;
+    transition:transform 0.2s;
+}
+
+.toggle.on::after {
+    transform:translateX(20px);
+}
+
+/* ── Chip Grid ── */
+.chip-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));
+    gap:8px;
+}
+
+.chip {
+    padding:10px 12px;
+    background:rgba(42,158,226,0.04);
+    border:1px solid rgba(42,158,226,0.1);
+    color:#666;
+    border-radius:6px;
+    font-size:0.85rem;
+    cursor:pointer;
+    transition:all 0.2s;
+    text-align:left;
+}
+
+.chip:hover {
+    border-color:rgba(42,158,226,0.3);
+    color:#888;
+}
+
+.chip.active {
+    background:rgba(42,158,226,0.1);
+    border-color:#2a9ee2;
+    color:#e0e0e0;
+}
+
+/* ── Info Text ── */
+.info-text {
+    font-size:0.75rem;
+    color:#666;
+    margin-top:6px;
+}
+
+/* ── Buttons ── */
+.btn-group {
+    display:flex;
+    gap:8px;
+    justify-content:flex-end;
+    margin-top:20px;
+}
+
+.btn {
+    padding:10px 16px;
+    border:none;
+    border-radius:6px;
+    font-size:0.85rem;
+    cursor:pointer;
+    transition:all 0.2s;
+    font-weight:500;
+}
+
+.btn-primary {
+    background:#d4af37;
+    color:#0a0e27;
+}
+
+.btn-primary:hover {
+    background:#e0bb42;
+}
+
+.btn-secondary {
+    background:transparent;
+    border:1px solid rgba(42,158,226,0.25);
+    color:#666;
+}
+
+.btn-secondary:hover {
+    border-color:#2a9ee2;
+    color:#2a9ee2;
+}
+
+/* ── Modal ── */
+.modal {
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    bottom:0;
+    background:rgba(0,0,0,0.75);
+    z-index:100;
+    justify-content:center;
+    align-items:center;
+}
+
+.modal.show { display:flex; }
+
+.modal-content {
+    background:rgba(13,27,42,0.95);
+    border:1px solid rgba(42,158,226,0.2);
+    border-radius:10px;
+    padding:24px;
+    max-width:400px;
+    width:90%;
+}
+
+.modal-title {
+    font-size:0.8rem;
+    letter-spacing:.08em;
+    color:#d4af37;
+    text-transform:uppercase;
+    margin-bottom:12px;
+}
+
+.modal-text {
+    font-size:0.85rem;
+    color:#aaa;
+    margin-bottom:16px;
+    line-height:1.5;
+}
+
+/* ── Toast ── */
+.toast {
+    display:none;
+    position:fixed;
+    top:20px;
+    right:20px;
+    padding:12px 16px;
+    background:rgba(13,27,42,0.95);
+    border-left:3px solid #2a9ee2;
+    border-radius:6px;
+    font-size:0.85rem;
+    z-index:200;
+}
+
+.toast.show { display:block; }
+.toast.success { border-color:#4cbf7e; }
+.toast.error { border-color:#e05252; }
+
+/* ── Layout Grid ── */
+.layout-section {
+    margin-top:20px;
+    font-size:0.75rem;
+    color:#666;
+    margin-bottom:8px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+}
+
+.layout-grid {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:1px;
+    background:rgba(42,158,226,0.25);
+    border-radius:8px;
+    overflow:hidden;
+}
+
+.layout-cell {
+    background:#0d1b2a;
+    padding:16px;
+    min-height:60px;
+    display:flex;
+    align-items:center;
+    font-size:0.8rem;
+}
+
+.layout-cell-fixed {
+    background:#060f1c;
+    font-weight:600;
+    color:#2a9ee2;
+    letter-spacing:.08em;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container" id="app">
+
+    <!-- Header -->
+    <div class="header">
+        <a href="/" class="header-link">← Zurück zu Jarvis</a>
+        <h1>J.A.R.V.I.S.</h1>
+        <p class="header-sub">Einstellungen</p>
+    </div>
+
+    <!-- API Keys & Services -->
+    <div class="panel">
+        <div class="panel-title">API Keys &amp; Services</div>
+
+        <div class="field-group">
+            <label class="label">Anthropic API Key</label>
+            <div class="field-row">
+                <input id="anthropicKey" type="password" placeholder="sk-ant-api03-…">
+                <button class="field-row-action" onclick="testKey('anthropic')" id="anthropicBtn">Testen</button>
+            </div>
+        </div>
+
+        <div class="field-group">
+            <label class="label">ElevenLabs API Key</label>
+            <div class="field-row">
+                <input id="elevenlabsKey" type="password" placeholder="sk_…">
+                <button class="field-row-action" onclick="testKey('elevenlabs')" id="elevenlabsBtn">Testen</button>
+            </div>
+        </div>
+
+        <div class="field-group">
+            <label class="label">ElevenLabs Voice</label>
+            <div class="field-row">
+                <select id="voiceSelect">
+                    <option value="">— Voice auswählen —</option>
+                </select>
+                <button class="field-row-action" onclick="previewVoice()" id="previewBtn">▶ Preview</button>
+            </div>
+            <p class="info-text" id="voiceCount">Voices werden geladen…</p>
+        </div>
+    </div>
+
+    <!-- User Profile -->
+    <div class="panel">
+        <div class="panel-title">Nutzer-Profil</div>
+
+        <div class="field-grid">
+            <div class="field-group">
+                <label class="label">Name</label>
+                <input id="userName" type="text" placeholder="Matthias">
+            </div>
+            <div class="field-group">
+                <label class="label">Anrede</label>
+                <input id="userAddress" type="text" placeholder="Sir">
+            </div>
+            <div class="field-group">
+                <label class="label">Stadt</label>
+                <input id="city" type="text" placeholder="Hamburg">
+            </div>
+            <div class="field-group">
+                <label class="label">Timezone</label>
+                <input id="timezone" type="text" placeholder="Europe/Berlin">
+            </div>
+        </div>
+
+        <div class="field-group">
+            <label class="label">Breitengrad / Längengrad</label>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <input id="lat" type="number" step="0.0001" placeholder="53.55">
+                <input id="lon" type="number" step="0.0001" placeholder="10.00">
+            </div>
+        </div>
+    </div>
+
+    <!-- Home Assistant -->
+    <div class="panel">
+        <div class="panel-title">
+            <span>Home Assistant</span>
+            <div class="toggle" id="haToggle" onclick="toggleHA()"></div>
+        </div>
+
+        <div id="haFields" style="opacity:0.3; pointer-events:none; transition:opacity 0.2s;">
+            <div class="field-group">
+                <label class="label">Home Assistant URL</label>
+                <input id="haUrl" type="text" placeholder="http://10.0.0.190:8123">
+            </div>
+            <div class="field-group">
+                <label class="label">Long-Lived Access Token</label>
+                <input id="haToken" type="password" placeholder="eyJhbGci…">
+            </div>
+        </div>
+    </div>
+
+    <!-- Services & Paths -->
+    <div class="panel">
+        <div class="panel-title">Dienste &amp; Pfade</div>
+
+        <div class="field-group">
+            <label class="label">Kachelmann Wetter API Key</label>
+            <input id="kachelmannKey" type="password" placeholder="ZNkF…">
+        </div>
+
+        <div class="field-group">
+            <label class="label">Workspace Pfad</label>
+            <input id="workspacePath" type="text" placeholder="/Users/matthias/jarvis">
+        </div>
+
+        <div class="field-group">
+            <label class="label">Obsidian Inbox Pfad</label>
+            <input id="obsidianPath" type="text" placeholder="/Users/matthias/Obsidian/Inbox">
+        </div>
+
+        <div class="field-group">
+            <label class="label">Browser Start-URL</label>
+            <input id="browserUrl" type="text" placeholder="https://google.com">
+        </div>
+
+        <div class="field-group">
+            <label class="label">Spotify Track URI</label>
+            <input id="spotifyTrack" type="text" placeholder="spotify:track:…">
+        </div>
+    </div>
+
+    <!-- Behavior -->
+    <div class="panel">
+        <div class="toggle-row">
+            <div class="toggle-row-label">
+                <div class="text">Begrüßung nach Standby</div>
+                <div class="sub">Jarvis meldet sich automatisch beim Aufwachen</div>
+            </div>
+            <div class="toggle" id="wakeGreetingToggle" onclick="toggleWakeGreeting()"></div>
+        </div>
+    </div>
+
+    <!-- Programs (Dropdown) -->
+    <div class="panel">
+        <div class="panel-title">Programme</div>
+        <p style="font-size:0.75rem; color:#888; margin-bottom:12px;">Wähle bis zu 6 Apps, die beim Start geöffnet werden sollen.</p>
+        <div class="field-grid" id="programsGrid">
+            <div class="field-group">
+                <label class="label">Programm 1</label>
+                <select id="program-0"></select>
+            </div>
+            <div class="field-group">
+                <label class="label">Programm 2</label>
+                <select id="program-1"></select>
+            </div>
+            <div class="field-group">
+                <label class="label">Programm 3</label>
+                <select id="program-2"></select>
+            </div>
+            <div class="field-group">
+                <label class="label">Programm 4</label>
+                <select id="program-3"></select>
+            </div>
+            <div class="field-group">
+                <label class="label">Programm 5</label>
+                <select id="program-4"></select>
+            </div>
+            <div class="field-group">
+                <label class="label">Programm 6</label>
+                <select id="program-5"></select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="btn-group">
+        <button class="btn btn-secondary" onclick="loadDefaults()">Zurücksetzen</button>
+        <button class="btn btn-primary" onclick="saveConfig()">Speichern</button>
+        <button class="btn btn-secondary" onclick="restart()" style="color:#e05252; border-color:#e05252;">⟳ Neu starten</button>
+    </div>
+</div>
+
+<!-- Modals & Toast -->
+<div class="modal" id="restartModal">
+    <div class="modal-content">
+        <div class="modal-title">Server neu starten?</div>
+        <p class="modal-text">Der Prozess wird beendet. launchd startet ihn automatisch neu. Jarvis ist 10–15 Sekunden nicht erreichbar.</p>
+        <div class="btn-group">
+            <button class="btn btn-secondary" onclick="closeModal()">Abbrechen</button>
+            <button class="btn btn-secondary" style="color:#e05252; border-color:#e05252;" onclick="confirmRestart()">⟳ Neu starten</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+<script defer src="/static/config.js"></script>
+
 </body>
 </html>

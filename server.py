@@ -553,6 +553,7 @@ async def synthesize_speech(text: str) -> bytes:
                 "voice_settings": {"stability": 0.5, "similarity_boost": 0.85},
             })
             if resp.status_code == 200:
+                print(f"  TTS OK: {len(resp.content)} bytes", flush=True)
                 return resp.content
             print(f"  TTS error: {resp.status_code} {resp.text[:100]}", flush=True)
         except Exception as e:
@@ -560,7 +561,9 @@ async def synthesize_speech(text: str) -> bytes:
         return b""
 
     parts = await asyncio.gather(*[_tts_chunk(c) for c in chunks])
-    return b"".join(parts)
+    total = b"".join(parts)
+    print(f"  TTS final: {len(total)} bytes total", flush=True)
+    return total
 
 
 async def execute_action(action: dict) -> str:
@@ -1178,6 +1181,190 @@ async def websocket_endpoint(ws: WebSocket):
         conversations.pop(session_id, None)
 
 
+# ── Dashboard API Endpoints ──────────────────────────────────────────────
+
+@app.get("/api/get_mails_unread")
+async def get_mails_unread():
+    """Return unread emails in structured format for dashboard."""
+    mails = []
+    for mail_str in MAIL_INFO:
+        parts = mail_str.split(" || ", 1)
+        if len(parts) == 2:
+            sender, subject = parts
+            mails.append({
+                "id": f"{sender}_{subject}",
+                "sender": sender.strip(),
+                "subject": subject.strip(),
+                "timestamp": "",  # Mail.app API doesn't easily expose timestamp without deeper scripting
+                "unread": True
+            })
+    return {"mails": mails, "total": len(mails)}
+
+
+@app.get("/api/get_tasks")
+async def get_tasks():
+    """Return reminders in structured format for dashboard."""
+    tasks = []
+    for i, task_name in enumerate(TASKS_INFO):
+        tasks.append({
+            "id": f"task_{i}",
+            "title": task_name.strip(),
+            "source": "reminders",
+            "completed": False
+        })
+    return {"tasks": tasks, "total": len(tasks)}
+
+
+@app.get("/api/get_obsidian_notes")
+async def get_obsidian_notes():
+    """Return Obsidian notes in structured format for dashboard."""
+    notes = []
+    if not OBSIDIAN_INBOX:
+        return {"notes": notes, "total": 0}
+
+    try:
+        import os
+        files = sorted([f for f in os.listdir(OBSIDIAN_INBOX) if f.endswith(".md")])
+        for fname in files:
+            fpath = os.path.join(OBSIDIAN_INBOX, fname)
+            try:
+                with open(fpath, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                # Use first 100 chars as preview, filename as title
+                title = fname.replace(".md", "").replace("_", " ")
+                preview = content[:100] + ("..." if len(content) > 100 else "")
+                notes.append({
+                    "id": fname,
+                    "title": title,
+                    "preview": preview,
+                    "content": content,
+                    "completed": False
+                })
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    return {"notes": notes, "total": len(notes)}
+
+
+@app.post("/api/complete_task")
+async def complete_task(request: Request):
+    """Mark a reminder task as complete."""
+    data = await request.json()
+    task_id = data.get("id", "")
+    task_title = data.get("title", "")
+
+    if not task_title:
+        return {"success": False, "message": "No task title provided"}
+
+    # Use the same AppleScript approach as REMINDER_DONE action
+    script = f'''tell application "Reminders"
+    set marked to 0
+    repeat with aList in every list
+        repeat with r in (every reminder in aList whose completed is false)
+            if name of r contains "{task_title}" then
+                set completed of r to true
+                set marked to marked + 1
+            end if
+        end repeat
+    end repeat
+    return marked
+end tell'''
+
+    try:
+        result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            global TASKS_INFO
+            TASKS_INFO = await asyncio.get_event_loop().run_in_executor(None, get_tasks_sync)
+            return {"success": True, "message": f"Task '{task_title}' marked as complete"}
+        return {"success": False, "message": "Failed to mark task as complete"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+@app.post("/api/complete_note")
+async def complete_note(request: Request):
+    """Mark an Obsidian note as complete (delete it)."""
+    data = await request.json()
+    note_id = data.get("id", "")  # filename
+
+    if not OBSIDIAN_INBOX or not note_id:
+        return {"success": False, "message": "Invalid note or Obsidian inbox not configured"}
+
+    try:
+        import os
+        fpath = os.path.join(OBSIDIAN_INBOX, note_id)
+        if os.path.exists(fpath) and fpath.startswith(OBSIDIAN_INBOX):
+            os.remove(fpath)
+            global OBSIDIAN_INFO
+            OBSIDIAN_INFO = await asyncio.get_event_loop().run_in_executor(None, get_obsidian_info_sync)
+            return {"success": True, "message": f"Note '{note_id}' marked as complete"}
+        return {"success": False, "message": "Note not found"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+@app.get("/api/ha_lights")
+async def get_ha_lights():
+    """Return Home Assistant light status for Smart Home panel."""
+    if not HA_URL or not HA_TOKEN:
+        return {"lights": [], "total": 0}
+
+    try:
+        import urllib.request
+        headers = {"Authorization": f"Bearer {HA_TOKEN}"}
+
+        # Fetch all light entities
+        req = urllib.request.Request(
+            f"{HA_URL}/api/states",
+            headers=headers
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            states = json.loads(resp.read())
+
+        lights = []
+        for entity in states:
+            entity_id = entity.get("entity_id", "")
+            if entity_id.startswith("light."):
+                state = entity.get("state", "unknown")
+                attrs = entity.get("attributes", {})
+                lights.append({
+                    "id": entity_id,
+                    "name": attrs.get("friendly_name", entity_id),
+                    "state": state,
+                    "brightness": attrs.get("brightness", 0),
+                    "is_on": state == "on"
+                })
+
+        return {"lights": lights, "total": len(lights)}
+    except Exception as e:
+        print(f"[jarvis] HA lights error: {e}", flush=True)
+        return {"lights": [], "total": 0, "error": str(e)}
+
+
+@app.post("/api/open_app")
+async def open_app(request: Request):
+    """Open a macOS application by name."""
+    data = await request.json()
+    app_name = data.get("app", "").strip()
+
+    if not app_name:
+        return {"success": False, "message": "No app name provided"}
+
+    try:
+        result = subprocess.run(
+            ["open", "-a", app_name],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            return {"success": True, "message": f"Opened {app_name}"}
+        else:
+            return {"success": False, "message": f"Failed: {result.stderr}"}
+    except Exception as e:
+        return {"success": False, "message": f"Error: {str(e)}"}
+
+
 @app.post("/api/wake")
 async def wake_notification():
     """Called by wake-monitor.py when system wakes from sleep."""
@@ -1227,10 +1414,11 @@ async def save_config_api(request: Request):
 
     allowed = [
         "anthropic_api_key", "elevenlabs_api_key", "elevenlabs_voice_id",
-        "user_name", "user_address", "city", "lat", "lon",
+        "user_name", "user_address", "city", "timezone", "lat", "lon",
         "kachelmann_api_key", "ha_url", "ha_token", "ha_enabled",
         "workspace_path", "obsidian_inbox_path", "browser_url",
-        "spotify_track_uri", "apps", "window_layout", "wake_greeting_enabled",
+        "spotify_track", "programs", "wake_greeting_enabled",
+        "window_layout",
     ]
     for field in allowed:
         if field in data:
@@ -1260,6 +1448,30 @@ async def save_config_api(request: Request):
 
     print(f"[jarvis] Config gespeichert via UI", flush=True)
     return {"status": "saved", "errors": errors}
+
+
+@app.get("/api/apps")
+async def get_available_apps():
+    """List all .app bundles from /Applications + key System apps"""
+    apps = set()
+
+    # Scan /Applications
+    apps_dir = "/Applications"
+    try:
+        if os.path.isdir(apps_dir):
+            for item in os.listdir(apps_dir):
+                if item.endswith('.app'):
+                    app_name = item[:-4]
+                    apps.add(app_name)
+    except Exception as e:
+        print(f"[jarvis] Error reading /Applications: {e}", flush=True)
+
+    # Add key System apps (fast, no full scan)
+    system_apps = ["Mail", "Reminders", "Notes", "Calendar", "Contacts", "Messages"]
+    for app in system_apps:
+        apps.add(app)
+
+    return {"apps": sorted(list(apps))}
 
 
 @app.post("/api/test/anthropic")
@@ -1356,6 +1568,11 @@ async def serve_index():
     return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "index.html"))
 
 
+@app.get("/dashboard")
+async def serve_dashboard():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "dashboard.html"))
+
+
 async def startup_and_refresh():
     """Load all startup data async without blocking the server, retry weather if network not ready,
     then refresh every 30 minutes."""
@@ -1409,10 +1626,94 @@ async def lifespan(app):
 app.router.lifespan_context = lifespan
 
 
+# ── Config API Endpoints ──────────────────────────────────────────────
+
+@app.post("/api/test_key")
+async def test_key(request: Request):
+    """Test API key validity."""
+    data = await request.json()
+    key_type = data.get("type", "").lower()
+    key = data.get("key", "").strip()
+
+    if not key:
+        return {"success": False, "error": "No key provided"}
+
+    try:
+        if key_type == "anthropic":
+            client = anthropic.Anthropic(api_key=key)
+            msg = await asyncio.to_thread(
+                client.messages.create,
+                model="claude-haiku-4-5-20251001",
+                max_tokens=10,
+                messages=[{"role": "user", "content": "Hi"}]
+            )
+            return {"success": True}
+        elif key_type == "elevenlabs":
+            async with httpx.AsyncClient() as c:
+                r = await c.get("https://api.elevenlabs.io/v1/voices", headers={"xi-api-key": key})
+                return {"success": r.status_code == 200, "error": None if r.status_code == 200 else "Invalid key"}
+        else:
+            return {"success": False, "error": "Unknown key type"}
+    except Exception as e:
+        return {"success": False, "error": str(e)[:100]}
+
+
+@app.post("/api/preview_voice")
+async def preview_voice(request: Request):
+    """Generate and return audio preview of a voice."""
+    data = await request.json()
+    voice_id = data.get("voice_id", "").strip()
+
+    if not voice_id:
+        return {"success": False, "error": "No voice_id"}
+
+    try:
+        audio_data = await synthesize_speech("Hallo, ich bin Jarvis.", voice_id)
+        if audio_data:
+            return {"audio": base64.b64encode(audio_data).decode("utf-8")}
+        return {"success": False, "error": "TTS failed"}
+    except Exception as e:
+        return {"success": False, "error": str(e)[:100]}
+
+
+@app.get("/api/elevenlabs_voices")
+async def get_elevenlabs_voices_list():
+    """Get list of available ElevenLabs voices."""
+    try:
+        resp = await http.get(
+            "https://api.elevenlabs.io/v1/voices",
+            headers={"xi-api-key": ELEVENLABS_API_KEY},
+        )
+        if resp.status_code == 200:
+            voices = [
+                {"voice_id": v["voice_id"], "name": v["name"]}
+                for v in resp.json().get("voices", [])
+            ]
+            return {"voices": voices}
+        return {"voices": []}
+    except:
+        return {"voices": []}
+
+
+@app.post("/api/reset_config")
+async def reset_config_api():
+    """Reset config to defaults."""
+    try:
+        with open(CONFIG_PATH.replace("config.json", "config.example.json"), "r") as f:
+            default_cfg = json.load(f)
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(default_cfg, f, indent=2)
+        return {"success": True}
+    except:
+        return {"success": False, "error": "Reset failed"}
+
+
 if __name__ == "__main__":
+    import sys
     import uvicorn
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8340
     print("=" * 50, flush=True)
     print("  J.A.R.V.I.S. V2 Server", flush=True)
-    print(f"  http://localhost:8340", flush=True)
+    print(f"  http://localhost:{port}", flush=True)
     print("=" * 50, flush=True)
-    uvicorn.run(app, host="0.0.0.0", port=8340)
+    uvicorn.run(app, host="0.0.0.0", port=port)

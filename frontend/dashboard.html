@@ -318,8 +318,23 @@ body {
             Programme
         </div>
     </div>
-    <div class="panel-content" id="programs-container">
-        <div class="placeholder">Programme werden geladen…</div>
+    <div class="panel-content">
+        <div class="list-item" onclick="openApp('Mail')">
+            <div class="list-icon"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg></div>
+            <div class="list-title">Mail</div>
+        </div>
+        <div class="list-item" onclick="openApp('Visual Studio Code')">
+            <div class="list-icon"><svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+            <div class="list-title">VS Code</div>
+        </div>
+        <div class="list-item" onclick="openApp('ChatGPT')">
+            <div class="list-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+            <div class="list-title">ChatGPT</div>
+        </div>
+        <div class="list-item" onclick="openApp('Claude')">
+            <div class="list-icon"><svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+            <div class="list-title">Claude</div>
+        </div>
     </div>
 </div>
 
@@ -689,43 +704,13 @@ async function completeNote(safeId, id, checked) {
     setTimeout(loadTasks, 500);
 }
 
-// ── Programme laden (async, blockiert nicht) ──
-async function loadPrograms() {
-    const box = document.getElementById('programs-container');
-    if (!box) return;
-    try {
-        const r = await Promise.race([
-            fetch('/api/config'),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
-        ]);
-        if (!r.ok) throw new Error();
-        const config = await r.json();
-        const programs = (config.programs || []).filter(p => p); // Filter out null/empty
-        if (!programs.length) {
-            box.innerHTML = '<div class="placeholder">Keine Programme konfiguriert</div>';
-            return;
-        }
-        box.innerHTML = programs.map(prog => `
-            <div class="list-item" onclick="openApp('${prog}')">
-                <div class="list-icon">▶</div>
-                <div class="list-title">${prog}</div>
-            </div>`).join('');
-    } catch {
-        box.innerHTML = '<div class="placeholder">—</div>';
-    }
-}
-
 // ── Init ──
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     setOrbState('idle');
     initSpeechRecognition();
-
-    // Load data first, THEN initialize WebSocket
-    await Promise.all([loadMails(), loadTasks(), loadPrograms()]);
-
-    // Now start WebSocket (Jarvis will have complete data)
     initWS();
-
+    loadMails();
+    loadTasks();
     setInterval(() => { loadMails(); loadTasks(); }, 60000);
 
     document.getElementById('jarvis-send').addEventListener('click', sendChatMessage);

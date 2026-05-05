@@ -33,12 +33,12 @@ CONFIG_FILE="$WORKSPACE_PATH/config.json"
 if [[ -f "$CONFIG_FILE" ]]; then
     SPOTIFY_TRACK=$(python3.11 -c "import json; c=json.load(open('$CONFIG_FILE')); print(c.get('spotify_track',''))" 2>/dev/null)
     BROWSER_URL=$(python3.11 -c "import json; c=json.load(open('$CONFIG_FILE')); print(c.get('browser_url',''))" 2>/dev/null)
-    APPS=$(python3.11 -c "import json; c=json.load(open('$CONFIG_FILE')); print(','.join(c.get('apps',[])))" 2>/dev/null)
+    PROGRAMS=$(python3.11 -c "import json; c=json.load(open('$CONFIG_FILE')); print(','.join([p for p in c.get('programs',[]) if p]))" 2>/dev/null)
 else
     echo "[jarvis] Warning: config.json not found, using defaults"
     SPOTIFY_TRACK=""
     BROWSER_URL=""
-    APPS=""
+    PROGRAMS=""
 fi
 
 SERVER_URL="http://localhost:8340"
@@ -149,17 +149,14 @@ fi
 
 # 3. Open configured apps
 echo "[3/5] Opening apps..."
-if [[ -n "$APPS" ]]; then
-    APP_ARRAY=(${(s:,:)APPS})
-    for app in "${APP_ARRAY[@]}"; do
-        echo "  → Opening: $app"
-        open -a "$app" 2>/dev/null || open "/System/Applications/${app}.app" 2>/dev/null
+if [[ -n "$PROGRAMS" ]]; then
+    PROGRAM_ARRAY=(${(s:,:)PROGRAMS})
+    for program in "${PROGRAM_ARRAY[@]}"; do
+        echo "  → Opening: $program"
+        open -a "$program" 2>/dev/null || open "/System/Applications/${program}.app" 2>/dev/null
     done
 else
-    echo "  → Opening default apps: Mail, VS Code, Music"
-    open -a "Mail"
-    open -a "Visual Studio Code"
-    open -a "Music"
+    echo "  → No programs configured in Config UI"
 fi
 
 # 4. Arrange windows in 4 equal quadrants
