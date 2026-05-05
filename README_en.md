@@ -168,7 +168,7 @@ jarvis-voice-assistant/
 │   ├── config.html        # Config UI (/config)
 │   ├── config.js          # Config UI logic
 │   ├── main.js            # Speech recognition + WebSocket + audio
-│   └── style.css          # Dark/light theme with animated orb
+│   └── style.css          # Dark/light theme, panel layouts
 └── scripts/
     ├── launch-session.sh  # Starts server + Chrome + mic-mute button
     ├── mic-mute-menubar.py # macOS menubar mute toggle
