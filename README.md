@@ -28,6 +28,16 @@ Built for macOS (Apple Silicon M4) with [Claude Code](https://claude.ai/code). K
 
 ---
 
+## Screenshots
+
+![Jarvis HUD](docs/screenshot_hud.png)
+*Jarvis HUD — voice conversation, mail inbox, tasks, and app launcher*
+
+![Config UI](docs/screenshot_config.png)
+*Config UI — all settings via browser, no text editor needed*
+
+---
+
 ## Features
 
 - **Voice Conversation** — Speak freely in German. Jarvis listens, thinks, responds with voice. Echo protection prevents feedback loops.
