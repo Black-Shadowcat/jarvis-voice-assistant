@@ -28,14 +28,6 @@ Built for macOS (Apple Silicon M4) with [Claude Code](https://claude.ai/code). K
 
 ---
 
-## 📖 Handbuch (Bedienungsanleitung)
-
-Eine vollständige Bedienungsanleitung für Nicht-Programmierer — von der Installation bis zum täglichen Betrieb.
-
-**[→ JARVIS_Handbuch.pdf herunterladen](docs/JARVIS_Handbuch.pdf)** *(direkt auf GitHub vorschaubar, druckfertig — kein Server nötig)*
-
----
-
 ## Screenshots
 
 ![Jarvis HUD](docs/screenshot_hud.png)

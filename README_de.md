@@ -28,6 +28,12 @@ Entwickelt für macOS (Apple Silicon M4) mit [Claude Code](https://claude.ai/cod
 
 ---
 
+## 📖 Handbuch
+
+**[→ JARVIS_Handbuch.pdf herunterladen](docs/JARVIS_Handbuch.pdf)** — vollständige Bedienungsanleitung für Nicht-Programmierer, direkt auf GitHub vorschaubar und druckfertig.
+
+---
+
 ## Features
 
 - **Sprachgespräch** — Spreche frei auf Deutsch. Jarvis hört zu, denkt nach, antwortet per Stimme. Echo-Schutz verhindert Rückkopplungsschleifen.
