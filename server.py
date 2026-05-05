@@ -25,12 +25,25 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 # Load config
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+VOICE_PATH  = os.path.join(os.path.dirname(__file__), "voice.json")
+
 with open(CONFIG_PATH, "r") as f:
     config = json.load(f)
 
+def _load_voice_db() -> dict:
+    """Load voice.json — fallback to config.json voice id if file missing."""
+    try:
+        with open(VOICE_PATH, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        fallback_id = config.get("elevenlabs_voice_id", "rDmv3mOhK6TnhYWckFaD")
+        return {"active_voice_id": fallback_id, "voices": [{"name": "Standard", "voice_id": fallback_id}]}
+
+_voice_db = _load_voice_db()
+
 ANTHROPIC_API_KEY = config["anthropic_api_key"]
 ELEVENLABS_API_KEY = config["elevenlabs_api_key"]
-ELEVENLABS_VOICE_ID = config.get("elevenlabs_voice_id", "rDmv3mOhK6TnhYWckFaD")
+ELEVENLABS_VOICE_ID = _voice_db["active_voice_id"]
 USER_NAME = config.get("user_name", "Julian")
 USER_ADDRESS = config.get("user_address", "Sir")
 CITY = config.get("city", "Hamburg")
@@ -145,7 +158,7 @@ class LichtParameters(BaseModel):
 
 class ActionModel(BaseModel):
     action: Literal[
-        "licht", "reminder_add", "reminder_done", "search", "open", "browse",
+        "licht", "reminder_add", "reminder_done", "search", "open", "open_app", "browse",
         "mail_read", "notiz", "notiz_erledigt", "kalender", "tasks_list",
         "notiz_list", "screen", "news", "none"
     ]
@@ -444,6 +457,7 @@ Du hast die volle Kontrolle ueber den Browser von {USER_NAME}. Du kannst im Inte
 AKTIONEN - Wenn eine Aktion noetig ist, schreibe NUR die Aktion — keinen Text davor, keine Einleitung, keine Bestaetigung. Das Ergebnis wird automatisch vorgelesen.
 [ACTION:SEARCH] suchbegriff - Internet durchsuchen und Ergebnisse zusammenfassen
 [ACTION:OPEN] url - URL im Browser oeffnen
+[ACTION:OPEN_APP] app-name - macOS App oeffnen. Nutze diese Aktion wenn Sir eine App, ein Programm oder eine Anwendung oeffnen moechte. Beispiele: "Mail", "Safari", "Visual Studio Code", "Obsidian", "Music". Schreibe den App-Namen exakt so wie er in macOS heisst.
 [ACTION:SCREEN] - Bildschirm ansehen und beschreiben.
 [ACTION:NEWS] - Aktuelle Weltnachrichten abrufen. Nutze diese Aktion wenn nach News, Nachrichten, was in der Welt passiert, aktuelle Lage oder Weltgeschehen gefragt wird. Schreibe einen kurzen Satz davor wie "Ich schaue nach den aktuellen Nachrichten."
 [ACTION:REMINDER_ADD] aufgabe - Neue Erinnerung in die Inbox schreiben. Nutze diese Aktion wenn Sir etwas hinzufuegen, notieren, merken oder erinnert werden moechte.
@@ -462,8 +476,8 @@ Antworte IMMER als JSON-Objekt. Bei normaler Antwort ohne Aktion:
 Bei Lichtsteuerung:
 {{"action": "licht", "parameters": {{"raum": "buero", "zustand": "an", "helligkeit": null}}, "response": null}}
 Raeume fuer licht (kanonisch): alle, wohnzimmer, kueche, buero, flur, schlafzimmer, balkon, sideboard, nachtschrank, iris, go. Zustand: "an" oder "aus". Helligkeit: 1-100 oder null.
-Bei allen anderen Aktionen: parameters: {{"payload": "bisheriger payload-text"}}
-Alle action-Werte: none, licht, reminder_add, reminder_done, search, open, browse, mail_read, notiz, notiz_erledigt, kalender, tasks_list, notiz_list, screen, news
+Bei open_app: parameters: {{"app": "App-Name"}}. Bei allen anderen Aktionen: parameters: {{"payload": "bisheriger payload-text"}}
+Alle action-Werte: none, licht, reminder_add, reminder_done, search, open, open_app, browse, mail_read, notiz, notiz_erledigt, kalender, tasks_list, notiz_list, screen, news
 Falls JSON nicht moeglich: altes Format [ACTION:TYP] payload bleibt gueltig.
 
 WENN {USER_NAME} "Jarvis activate" sagt:
@@ -530,7 +544,7 @@ def parse_structured_action(reply: str) -> Optional[ActionModel]:
         return None
 
 
-async def synthesize_speech(text: str) -> bytes:
+async def synthesize_speech(text: str, voice_id: Optional[str] = None) -> bytes:
     if not text.strip():
         return b""
 
@@ -551,7 +565,8 @@ async def synthesize_speech(text: str) -> bytes:
         chunks = [text]
 
     async def _tts_chunk(chunk: str) -> bytes:
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+        vid = voice_id or ELEVENLABS_VOICE_ID
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{vid}"
         try:
             resp = await http.post(url, headers={
                 "xi-api-key": ELEVENLABS_API_KEY,
@@ -596,6 +611,15 @@ async def execute_action(action: dict) -> str:
     elif t == "OPEN":
         await browser_tools.open_url(p)
         return f"Geoeffnet: {p}"
+
+    elif t == "OPEN_APP":
+        app_name = p.strip()
+        if not app_name:
+            return f"Kein App-Name angegeben."
+        result = subprocess.run(["open", "-a", app_name], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            return f"{app_name} geöffnet, {USER_ADDRESS}."
+        return f"{app_name} konnte nicht gefunden werden, {USER_ADDRESS}."
 
     elif t == "SCREEN":
         return await screen_capture.describe_screen(ai)
@@ -869,7 +893,7 @@ end tell'''
 
 
 # Actions whose result is already a clean, speakable string — no second LLM call needed
-_TEMPLATE_ACTIONS = {"LICHT", "REMINDER_ADD", "REMINDER_DONE", "NOTIZ", "NOTIZ_ERLEDIGT"}
+_TEMPLATE_ACTIONS = {"LICHT", "REMINDER_ADD", "REMINDER_DONE", "NOTIZ", "NOTIZ_ERLEDIGT", "OPEN_APP"}
 
 
 async def _speak(ws: WebSocket, session_id: str, text: str):
@@ -907,6 +931,7 @@ def _structured_to_legacy_action(structured: ActionModel) -> Optional[dict]:
     _map = {
         "search":         ("SEARCH",         p.get("query", p.get("payload", ""))),
         "open":           ("OPEN",           p.get("url", p.get("payload", ""))),
+        "open_app":       ("OPEN_APP",       p.get("app", p.get("payload", ""))),
         "browse":         ("BROWSE",         p.get("url", p.get("payload", ""))),
         "screen":         ("SCREEN",         ""),
         "news":           ("NEWS",           ""),
@@ -1196,9 +1221,11 @@ async def websocket_endpoint(ws: WebSocket):
 
 @app.get("/api/get_mails_unread")
 async def get_mails_unread():
-    """Return unread emails in structured format for dashboard."""
+    """Return unread emails — always fetched live from Mail.app."""
+    loop = asyncio.get_event_loop()
+    fresh = await loop.run_in_executor(None, get_mail_sync)
     mails = []
-    for mail_str in MAIL_INFO:
+    for mail_str in fresh:
         parts = mail_str.split(" || ", 1)
         if len(parts) == 2:
             sender, subject = parts
@@ -1206,7 +1233,7 @@ async def get_mails_unread():
                 "id": f"{sender}_{subject}",
                 "sender": sender.strip(),
                 "subject": subject.strip(),
-                "timestamp": "",  # Mail.app API doesn't easily expose timestamp without deeper scripting
+                "timestamp": "",
                 "unread": True
             })
     return {"mails": mails, "total": len(mails)}
@@ -1214,9 +1241,11 @@ async def get_mails_unread():
 
 @app.get("/api/get_tasks")
 async def get_tasks():
-    """Return reminders in structured format for dashboard."""
+    """Return reminders — always fetched live from Reminders.app."""
+    loop = asyncio.get_event_loop()
+    fresh = await loop.run_in_executor(None, get_tasks_sync)
     tasks = []
-    for i, task_name in enumerate(TASKS_INFO):
+    for i, task_name in enumerate(fresh):
         tasks.append({
             "id": f"task_{i}",
             "title": task_name.strip(),
@@ -1665,9 +1694,17 @@ async def test_key(request: Request):
             )
             return {"success": True}
         elif key_type == "elevenlabs":
-            async with httpx.AsyncClient() as c:
-                r = await c.get("https://api.elevenlabs.io/v1/voices", headers={"xi-api-key": key})
-                return {"success": r.status_code == 200, "error": None if r.status_code == 200 else "Invalid key"}
+            # /v1/voices is restricted on Starter plans — use a minimal TTS request instead
+            resp = await http.post(
+                "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+                headers={"xi-api-key": key, "Content-Type": "application/json"},
+                json={"text": "x", "model_id": "eleven_multilingual_v2", "output_format": "mp3_22050_32"},
+            )
+            if resp.status_code == 200:
+                return {"success": True}
+            if resp.status_code == 401:
+                return {"success": False, "error": "Ungültiger API Key"}
+            return {"success": False, "error": f"HTTP {resp.status_code}"}
         else:
             return {"success": False, "error": "Unknown key type"}
     except Exception as e:
@@ -1693,22 +1730,29 @@ async def preview_voice(request: Request):
 
 
 @app.get("/api/elevenlabs_voices")
-async def get_elevenlabs_voices_list():
-    """Get list of available ElevenLabs voices."""
+async def get_elevenlabs_voices_list(key: str = ""):
+    """Get list of available ElevenLabs voices. Accepts optional ?key= to use a specific API key."""
+    api_key = key.strip() or ELEVENLABS_API_KEY
     try:
         resp = await http.get(
             "https://api.elevenlabs.io/v1/voices",
-            headers={"xi-api-key": ELEVENLABS_API_KEY},
+            headers={"xi-api-key": api_key},
         )
         if resp.status_code == 200:
-            voices = [
-                {"voice_id": v["voice_id"], "name": v["name"]}
-                for v in resp.json().get("voices", [])
-            ]
-            return {"voices": voices}
-        return {"voices": []}
-    except:
-        return {"voices": []}
+            voices = sorted(
+                [{"voice_id": v["voice_id"], "name": v["name"]} for v in resp.json().get("voices", [])],
+                key=lambda v: v["name"]
+            )
+            if voices:
+                return {"voices": voices}
+        # Fallback: return the currently configured voice so dropdown is never empty
+        if ELEVENLABS_VOICE_ID:
+            return {"voices": [{"voice_id": ELEVENLABS_VOICE_ID, "name": "Aktuelle Voice (Fallback)"}], "fallback": True}
+        return {"voices": [], "error": f"HTTP {resp.status_code}"}
+    except Exception as e:
+        if ELEVENLABS_VOICE_ID:
+            return {"voices": [{"voice_id": ELEVENLABS_VOICE_ID, "name": "Aktuelle Voice (Fallback)"}], "fallback": True}
+        return {"voices": [], "error": str(e)[:80]}
 
 
 @app.post("/api/reset_config")
@@ -1723,6 +1767,45 @@ async def reset_config_api():
     except:
         return {"success": False, "error": "Reset failed"}
 
+
+# ── Voice Library Endpoints ───────────────────────────────────────────────
+
+@app.get("/api/voices")
+async def get_voices():
+    """Return voice library from voice.json."""
+    return _load_voice_db()
+
+
+@app.post("/api/voices/save")
+async def save_voices(request: Request):
+    """Save complete voice library to voice.json."""
+    global _voice_db
+    data = await request.json()
+    if "voices" not in data or "active_voice_id" not in data:
+        return {"success": False, "error": "Ungültiges Format"}
+    _voice_db = data
+    with open(VOICE_PATH, "w") as f:
+        json.dump(_voice_db, f, indent=2, ensure_ascii=False)
+    return {"success": True}
+
+
+@app.post("/api/voices/activate")
+async def activate_voice(request: Request):
+    """Set active voice and hot-reload ELEVENLABS_VOICE_ID."""
+    global ELEVENLABS_VOICE_ID, _voice_db
+    data = await request.json()
+    voice_id = data.get("voice_id", "").strip()
+    if not voice_id:
+        return {"success": False, "error": "Keine voice_id angegeben"}
+    _voice_db = _load_voice_db()
+    _voice_db["active_voice_id"] = voice_id
+    with open(VOICE_PATH, "w") as f:
+        json.dump(_voice_db, f, indent=2, ensure_ascii=False)
+    ELEVENLABS_VOICE_ID = voice_id
+    print(f"[jarvis] Voice aktiviert: {voice_id}", flush=True)
+    return {"success": True}
+
+# ──────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import sys

@@ -1,6 +1,7 @@
 // Load config on page load
 document.addEventListener('DOMContentLoaded', () => {
     loadConfig();
+    loadVoiceLibrary();
     fetch('/api/version').then(r => r.json()).then(v => {
         const el = document.getElementById('app-version');
         if (el) el.textContent = `v${v.version}`;
@@ -8,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 let currentConfig = {};
+let voiceDb = { active_voice_id: '', voices: [] };
 
 async function loadConfig() {
     try {
@@ -18,7 +20,6 @@ async function loadConfig() {
         // Fill form fields
         document.getElementById('anthropicKey').value = data.anthropic_api_key || '';
         document.getElementById('elevenlabsKey').value = data.elevenlabs_api_key || '';
-        document.getElementById('voiceSelect').value = data.elevenlabs_voice_id || '';
         document.getElementById('userName').value = data.user_name || '';
         document.getElementById('userAddress').value = data.user_address || '';
         document.getElementById('city').value = data.city || '';
@@ -45,9 +46,6 @@ async function loadConfig() {
             document.getElementById('wakeGreetingToggle').classList.add('on');
         }
 
-        // Load voices
-        await loadVoices();
-
         // Load available apps and populate dropdowns
         await loadAvailableApps();
 
@@ -59,30 +57,151 @@ async function loadConfig() {
     }
 }
 
-async function loadVoices() {
-    try {
-        const resp = await fetch('/api/elevenlabs_voices');
-        const data = await resp.json();
-        const select = document.getElementById('voiceSelect');
-        const currentVoice = currentConfig.elevenlabs_voice_id || '';
-        const count = data.voices?.length || 0;
-        document.getElementById('voiceCount').textContent = `${count} Voices geladen`;
+// ── Voice Library ─────────────────────────────────────────────────────────
 
-        if (data.voices) {
-            data.voices.forEach(v => {
-                const opt = document.createElement('option');
-                opt.value = v.voice_id;
-                opt.textContent = v.name;
-                select.appendChild(opt);
-            });
-            // Set the current voice after populating
-            if (currentVoice) {
-                select.value = currentVoice;
-            }
-        }
-    } catch (e) {
-        console.error('Voices load failed:', e);
+async function loadVoiceLibrary() {
+    try {
+        const resp = await fetch('/api/voices');
+        voiceDb = await resp.json();
+        renderActiveVoice();
+    } catch(e) {
+        const d = document.getElementById('activeVoiceDisplay');
+        if (d) d.textContent = 'Fehler beim Laden';
     }
+}
+
+function renderActiveVoice() {
+    const display = document.getElementById('activeVoiceDisplay');
+    if (!display) return;
+    const active = voiceDb.voices?.find(v => v.voice_id === voiceDb.active_voice_id);
+    display.textContent = active ? `● ${active.name}` : (voiceDb.active_voice_id || '—');
+}
+
+function renderVoiceList() {
+    const list = document.getElementById('voiceList');
+    if (!list) return;
+    if (!voiceDb.voices?.length) {
+        list.innerHTML = '<div style="color:#555;font-size:0.85rem;text-align:center;padding:16px;">Noch keine Stimmen gespeichert.</div>';
+        return;
+    }
+    list.innerHTML = voiceDb.voices.map((v, i) => {
+        const isActive = v.voice_id === voiceDb.active_voice_id;
+        return `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:6px;background:${isActive ? 'rgba(76,191,126,0.08)' : 'rgba(42,158,226,0.04)'};border:1px solid ${isActive ? 'rgba(76,191,126,0.3)' : 'rgba(42,158,226,0.1)'};">
+            <div style="flex:1;min-width:0;">
+                <div style="font-size:0.85rem;font-weight:500;${isActive ? 'color:#4cbf7e' : ''}">${isActive ? '● ' : '○ '}${v.name}</div>
+                <div style="font-size:0.7rem;color:#555;font-family:monospace;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.voice_id}</div>
+            </div>
+            <button class="field-row-action eye-btn" onclick="playVoicePreview('${v.voice_id}')" title="Testen">▶</button>
+            ${isActive
+                ? `<button class="field-row-action" style="border-color:#4cbf7e;color:#4cbf7e;cursor:default;opacity:0.6;" disabled>Aktiv</button>`
+                : `<button class="field-row-action" onclick="activateVoice('${v.voice_id}')">Aktivieren</button>`}
+            <button class="field-row-action eye-btn" onclick="removeVoice(${i})" title="Löschen" style="color:#e05252;">✗</button>
+        </div>`;
+    }).join('');
+}
+
+function openVoiceModal() {
+    renderVoiceList();
+    document.getElementById('voiceModal').classList.add('show');
+}
+
+function closeVoiceModal() {
+    document.getElementById('voiceModal').classList.remove('show');
+    document.getElementById('newVoiceName').value = '';
+    document.getElementById('newVoiceId').value   = '';
+}
+
+async function activateVoice(voiceId) {
+    try {
+        const resp = await fetch('/api/voices/activate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({voice_id: voiceId})
+        });
+        const data = await resp.json();
+        if (data.success) {
+            voiceDb.active_voice_id = voiceId;
+            renderActiveVoice();
+            renderVoiceList();
+            showToast('Stimme aktiviert', 'success');
+        } else {
+            showToast('Fehler: ' + (data.error || ''), 'error');
+        }
+    } catch(e) {
+        showToast('Fehler: ' + e.message, 'error');
+    }
+}
+
+async function addVoice() {
+    const name    = document.getElementById('newVoiceName').value.trim();
+    const voiceId = document.getElementById('newVoiceId').value.trim();
+    if (!name || !voiceId) { showToast('Name und Voice ID erforderlich', 'error'); return; }
+    if (voiceDb.voices.some(v => v.voice_id === voiceId)) { showToast('Voice ID bereits vorhanden', 'error'); return; }
+    voiceDb.voices.push({name, voice_id: voiceId});
+    await saveVoiceDb();
+    document.getElementById('newVoiceName').value = '';
+    document.getElementById('newVoiceId').value   = '';
+    renderVoiceList();
+    showToast(`"${name}" hinzugefügt`, 'success');
+}
+
+async function removeVoice(index) {
+    if (voiceDb.voices[index]?.voice_id === voiceDb.active_voice_id) {
+        showToast('Aktive Stimme kann nicht gelöscht werden', 'error');
+        return;
+    }
+    voiceDb.voices.splice(index, 1);
+    await saveVoiceDb();
+    renderVoiceList();
+    showToast('Stimme entfernt', 'success');
+}
+
+async function saveVoiceDb() {
+    await fetch('/api/voices/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(voiceDb)
+    });
+}
+
+async function playVoicePreview(voiceId) {
+    try {
+        const resp = await fetch('/api/preview_voice', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({voice_id: voiceId})
+        });
+        const data = await resp.json();
+        if (data.audio) {
+            new Audio('data:audio/mpeg;base64,' + data.audio).play();
+        } else {
+            showToast('Vorschau fehlgeschlagen: ' + (data.error || 'Kein Audio'), 'error');
+        }
+    } catch(e) {
+        showToast('Vorschau fehlgeschlagen', 'error');
+    }
+}
+
+async function previewActiveVoice() {
+    if (!voiceDb.active_voice_id) { showToast('Keine aktive Stimme', 'error'); return; }
+    await playVoicePreview(voiceDb.active_voice_id);
+}
+
+async function testNewVoice() {
+    const voiceId = document.getElementById('newVoiceId').value.trim();
+    if (!voiceId) { showToast('Voice ID eingeben', 'error'); return; }
+    const btn = document.getElementById('testNewVoiceBtn');
+    btn.textContent = '…'; btn.disabled = true;
+    await playVoicePreview(voiceId);
+    btn.textContent = '▶ Testen'; btn.disabled = false;
+}
+
+async function loadVoices(apiKey) {
+    const key = apiKey || document.getElementById('elevenlabsKey')?.value.trim() || '';
+    try {
+        const url = key ? `/api/elevenlabs_voices?key=${encodeURIComponent(key)}` : '/api/elevenlabs_voices';
+        return await (await fetch(url)).json();
+    } catch(e) { return {voices: [], error: e.message}; }
 }
 
 async function testKey(type) {
@@ -133,31 +252,6 @@ async function testKey(type) {
         }, 3000);
     } finally {
         btn.disabled = false;
-    }
-}
-
-async function previewVoice() {
-    const voiceId = document.getElementById('voiceSelect').value;
-    if (!voiceId) {
-        showToast('Voice auswählen', 'error');
-        return;
-    }
-
-    try {
-        const resp = await fetch('/api/preview_voice', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({voice_id: voiceId})
-        });
-
-        const data = await resp.json();
-        if (data.audio) {
-            const audio = new Audio('data:audio/mpeg;base64,' + data.audio);
-            audio.play();
-            showToast('Voice-Vorschau wird abgespielt', 'success');
-        }
-    } catch (e) {
-        showToast('Vorschau fehlgeschlagen', 'error');
     }
 }
 
@@ -216,6 +310,10 @@ function loadPrograms(programs) {
 }
 
 async function saveConfig() {
+    const btn = document.querySelector('.btn-primary');
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '…';
     // Collect all 6 program slots (including empty ones, storing null for empty)
     const programs = [];
     for (let i = 0; i < 6; i++) {
@@ -228,13 +326,9 @@ async function saveConfig() {
     }
 
     // Use selected voice or fallback to current/default if dropdown is empty
-    let voiceId = document.getElementById('voiceSelect').value;
-    if (!voiceId && currentConfig.elevenlabs_voice_id) {
-        voiceId = currentConfig.elevenlabs_voice_id;
-    }
-    if (!voiceId) {
-        voiceId = 'rDmv3mOhK6TnhYWckFaD'; // Default voice ID fallback
-    }
+    const voiceId = voiceDb.active_voice_id
+        || currentConfig.elevenlabs_voice_id
+        || 'rDmv3mOhK6TnhYWckFaD';
 
     const config = {
         anthropic_api_key: document.getElementById('anthropicKey').value,
@@ -267,13 +361,25 @@ async function saveConfig() {
 
         const data = await resp.json();
         if (data.status === 'saved' && (!data.errors || data.errors.length === 0)) {
+            btn.textContent = '✓ Gespeichert';
+            btn.style.background = '#4cbf7e';
             showToast('Einstellungen gespeichert', 'success');
         } else {
             const errorMsg = data.errors && data.errors.length > 0 ? data.errors[0] : 'Fehler beim Speichern';
+            btn.textContent = '✗ Fehler';
+            btn.style.background = '#e05252';
             showToast(errorMsg, 'error');
         }
     } catch (e) {
+        btn.textContent = '✗ Fehler';
+        btn.style.background = '#e05252';
         showToast('Speichern fehlgeschlagen: ' + e.message, 'error');
+    } finally {
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = original;
+            btn.style.background = '';
+        }, 2500);
     }
 }
 
@@ -299,6 +405,14 @@ async function confirmRestart() {
     showToast('Server wird neu gestartet…', 'success');
     await fetch('/api/restart', {method: 'POST'}).catch(() => {});
     setTimeout(() => location.reload(), 2000);
+}
+
+function toggleVisibility(fieldId, btn) {
+    const input = document.getElementById(fieldId);
+    const isHidden = input.type === 'password';
+    input.type = isHidden ? 'text' : 'password';
+    btn.textContent = isHidden ? '🙈' : '👁';
+    btn.title = isHidden ? 'Key verstecken' : 'Key anzeigen';
 }
 
 function showToast(msg, type = 'info') {

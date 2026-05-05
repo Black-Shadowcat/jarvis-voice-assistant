@@ -143,6 +143,14 @@ input[type="password"] { font-family:monospace; }
     cursor:default;
 }
 
+.eye-btn {
+    padding:10px 10px;
+    font-size:1rem;
+    opacity:0.5;
+    transition:opacity 0.2s;
+}
+.eye-btn:hover { opacity:1; background:rgba(42,158,226,0.08); }
+
 .field-row-action.ok {
     border-color:#4cbf7e;
     color:#4cbf7e;
@@ -413,6 +421,7 @@ input[type="password"] { font-family:monospace; }
             <label class="label">Anthropic API Key</label>
             <div class="field-row">
                 <input id="anthropicKey" type="password" placeholder="sk-ant-api03-…">
+                <button class="field-row-action eye-btn" onclick="toggleVisibility('anthropicKey', this)" title="Key anzeigen">👁</button>
                 <button class="field-row-action" onclick="testKey('anthropic')" id="anthropicBtn">Testen</button>
             </div>
         </div>
@@ -421,19 +430,18 @@ input[type="password"] { font-family:monospace; }
             <label class="label">ElevenLabs API Key</label>
             <div class="field-row">
                 <input id="elevenlabsKey" type="password" placeholder="sk_…">
+                <button class="field-row-action eye-btn" onclick="toggleVisibility('elevenlabsKey', this)" title="Key anzeigen">👁</button>
                 <button class="field-row-action" onclick="testKey('elevenlabs')" id="elevenlabsBtn">Testen</button>
             </div>
         </div>
 
         <div class="field-group">
-            <label class="label">ElevenLabs Voice</label>
+            <label class="label">Aktive Stimme</label>
             <div class="field-row">
-                <select id="voiceSelect">
-                    <option value="">— Voice auswählen —</option>
-                </select>
-                <button class="field-row-action" onclick="previewVoice()" id="previewBtn">▶ Preview</button>
+                <div id="activeVoiceDisplay" style="flex:1;padding:10px 12px;background:rgba(6,13,24,0.8);border:1px solid rgba(42,158,226,0.2);border-radius:6px;font-size:0.85rem;color:#e0e0e0;">Wird geladen…</div>
+                <button class="field-row-action" onclick="previewActiveVoice()" id="previewBtn">▶ Preview</button>
+                <button class="field-row-action" onclick="openVoiceModal()" style="white-space:nowrap;">⚙ Verwalten</button>
             </div>
-            <p class="info-text" id="voiceCount">Voices werden geladen…</p>
         </div>
     </div>
 
@@ -483,7 +491,10 @@ input[type="password"] { font-family:monospace; }
             </div>
             <div class="field-group">
                 <label class="label">Long-Lived Access Token</label>
-                <input id="haToken" type="password" placeholder="eyJhbGci…">
+                <div class="field-row">
+                    <input id="haToken" type="password" placeholder="eyJhbGci…">
+                    <button class="field-row-action eye-btn" onclick="toggleVisibility('haToken', this)" title="Token anzeigen">👁</button>
+                </div>
             </div>
         </div>
     </div>
@@ -494,7 +505,10 @@ input[type="password"] { font-family:monospace; }
 
         <div class="field-group">
             <label class="label">Kachelmann Wetter API Key</label>
-            <input id="kachelmannKey" type="password" placeholder="ZNkF…">
+            <div class="field-row">
+                <input id="kachelmannKey" type="password" placeholder="ZNkF…">
+                <button class="field-row-action eye-btn" onclick="toggleVisibility('kachelmannKey', this)" title="Key anzeigen">👁</button>
+            </div>
         </div>
 
         <div class="field-group">
@@ -561,15 +575,47 @@ input[type="password"] { font-family:monospace; }
         </div>
     </div>
 
+    <!-- Back link bottom -->
+    <div style="text-align:center;margin-bottom:4px;">
+        <a href="/" class="header-link">← Zurück zu Jarvis</a>
+    </div>
+
     <!-- Action Buttons -->
     <div class="btn-group">
-        <button class="btn btn-secondary" onclick="loadDefaults()">Zurücksetzen</button>
+        <button class="btn btn-secondary" onclick="loadDefaults()" style="margin-right:auto;">Zurücksetzen</button>
         <button class="btn btn-primary" onclick="saveConfig()">Speichern</button>
         <button class="btn btn-secondary" onclick="restart()" style="color:#e05252; border-color:#e05252;">⟳ Neu starten</button>
     </div>
 </div>
 
 <!-- Modals & Toast -->
+<!-- ── Voice Modal ── -->
+<div class="modal" id="voiceModal" onclick="if(event.target===this)closeVoiceModal()">
+    <div class="modal-content" style="max-width:560px;width:95%;">
+        <div class="modal-title">Stimmen-Bibliothek</div>
+
+        <!-- Voice List -->
+        <div id="voiceList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;max-height:280px;overflow-y:auto;"></div>
+
+        <!-- Add New Voice -->
+        <div style="border-top:1px solid rgba(42,158,226,0.15);padding-top:16px;">
+            <div style="font-size:0.75rem;letter-spacing:.08em;color:#2a9ee2;text-transform:uppercase;margin-bottom:10px;">Neue Stimme hinzufügen</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                <input id="newVoiceName"    type="text"     placeholder="Name (z.B. English Butler)" style="width:100%">
+                <input id="newVoiceId"      type="text"     placeholder="Voice ID (von ElevenLabs)"  style="width:100%;font-family:monospace;font-size:0.8rem;">
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button class="field-row-action" onclick="testNewVoice()" id="testNewVoiceBtn">▶ Testen</button>
+                <button class="field-row-action" onclick="addVoice()" style="border-color:#4cbf7e;color:#4cbf7e;">+ Hinzufügen</button>
+            </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:16px;">
+            <button class="btn btn-secondary" onclick="closeVoiceModal()">Schließen</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal" id="restartModal">
     <div class="modal-content">
         <div class="modal-title">Server neu starten?</div>

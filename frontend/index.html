@@ -205,12 +205,12 @@ body {
     word-break:break-word;
 }
 .msg.jarvis {
-    background:rgba(42,158,226,0.08);
-    border-color:#2a9ee2;
-}
-.msg.user {
     background:rgba(76,191,126,0.08);
     border-color:#4cbf7e;
+}
+.msg.user {
+    background:rgba(42,158,226,0.08);
+    border-color:#2a9ee2;
 }
 .msg strong { font-size:0.75rem; text-transform:uppercase; letter-spacing:.05em; }
 
@@ -749,7 +749,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Now start WebSocket (Jarvis will have complete data)
     initWS();
 
-    setInterval(() => { loadMails(); loadTasks(); }, 60000);
+    setInterval(() => { loadMails(); loadTasks(); }, 20000);
 
     fetch('/api/version').then(r => r.json()).then(v => {
         document.getElementById('app-version').textContent = `v${v.version}`;
