@@ -1108,8 +1108,14 @@ async def handle_structured_action(structured: ActionModel, ws: WebSocket, sessi
 
 async def process_message(session_id: str, user_text: str, ws: WebSocket):
     """Process message and send exactly one spoken response via WebSocket."""
+    global MAIL_INFO
     if session_id not in conversations:
         conversations[session_id] = []
+
+    # Refresh mail cache live for greetings so the count is always accurate
+    if "jarvis activate" in user_text.lower():
+        loop = asyncio.get_event_loop()
+        MAIL_INFO = await loop.run_in_executor(None, get_mail_sync)
 
     conversations[session_id].append({"role": "user", "content": user_text})
     history = conversations[session_id][-16:]
