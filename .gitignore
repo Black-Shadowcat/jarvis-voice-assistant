@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 config.json
 voice.json
+*.code-workspace
