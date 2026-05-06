@@ -1361,43 +1361,6 @@ async def complete_note(request: Request):
         return {"success": False, "message": str(e)}
 
 
-@app.get("/api/ha_lights")
-async def get_ha_lights():
-    """Return Home Assistant light status for Smart Home panel."""
-    if not HA_URL or not HA_TOKEN:
-        return {"lights": [], "total": 0}
-
-    try:
-        import urllib.request
-        headers = {"Authorization": f"Bearer {HA_TOKEN}"}
-
-        # Fetch all light entities
-        req = urllib.request.Request(
-            f"{HA_URL}/api/states",
-            headers=headers
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            states = json.loads(resp.read())
-
-        lights = []
-        for entity in states:
-            entity_id = entity.get("entity_id", "")
-            if entity_id.startswith("light."):
-                state = entity.get("state", "unknown")
-                attrs = entity.get("attributes", {})
-                lights.append({
-                    "id": entity_id,
-                    "name": attrs.get("friendly_name", entity_id),
-                    "state": state,
-                    "brightness": attrs.get("brightness", 0),
-                    "is_on": state == "on"
-                })
-
-        return {"lights": lights, "total": len(lights)}
-    except Exception as e:
-        print(f"[jarvis] HA lights error: {e}", flush=True)
-        return {"lights": [], "total": 0, "error": str(e)}
-
 
 @app.post("/api/open_app")
 async def open_app(request: Request):
@@ -1534,91 +1497,6 @@ async def get_available_apps():
 
     return {"apps": sorted(list(apps))}
 
-
-@app.post("/api/test/anthropic")
-async def test_anthropic_key(request: Request):
-    data = await request.json()
-    api_key = data.get("api_key", "")
-    if not api_key:
-        return {"valid": False, "message": "Kein API Key angegeben"}
-    try:
-        test_client = anthropic.AsyncAnthropic(api_key=api_key)
-        resp = await test_client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=5,
-            messages=[{"role": "user", "content": "Hi"}],
-        )
-        return {"valid": True, "message": "API Key gültig ✓"}
-    except Exception as e:
-        msg = str(e)
-        if "authentication" in msg.lower() or "api_key" in msg.lower() or "401" in msg:
-            return {"valid": False, "message": "Ungültiger API Key"}
-        return {"valid": False, "message": f"Fehler: {msg[:120]}"}
-
-
-@app.post("/api/test/elevenlabs")
-async def test_elevenlabs_key(request: Request):
-    data = await request.json()
-    api_key = data.get("api_key", "")
-    if not api_key:
-        return {"valid": False, "message": "Kein API Key angegeben"}
-    # Validate via a minimal TTS request — /v1/user is restricted on Starter plans
-    try:
-        resp = await http.post(
-            "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM",
-            headers={"xi-api-key": api_key, "Content-Type": "application/json"},
-            json={"text": "x", "model_id": "eleven_multilingual_v2", "output_format": "mp3_22050_32"},
-        )
-        if resp.status_code == 200:
-            return {"valid": True, "message": "API Key gültig ✓"}
-        if resp.status_code == 401:
-            return {"valid": False, "message": "Ungültiger API Key"}
-        return {"valid": False, "message": f"Fehler HTTP {resp.status_code}"}
-    except Exception as e:
-        return {"valid": False, "message": f"Verbindungsfehler: {str(e)[:100]}"}
-
-
-@app.get("/api/elevenlabs/voices")
-async def get_elevenlabs_voices():
-    try:
-        resp = await http.get(
-            "https://api.elevenlabs.io/v1/voices",
-            headers={"xi-api-key": ELEVENLABS_API_KEY},
-        )
-        if resp.status_code == 200:
-            voices = [
-                {
-                    "id": v["voice_id"],
-                    "name": v["name"],
-                    "language": v.get("labels", {}).get("language", ""),
-                }
-                for v in resp.json().get("voices", [])
-            ]
-            return sorted(voices, key=lambda x: x["name"])
-    except Exception:
-        pass
-    # Starter plan may not allow /v1/voices — return current voice as fallback
-    if ELEVENLABS_VOICE_ID:
-        return [{"id": ELEVENLABS_VOICE_ID, "name": "Aktuelle Voice", "language": ""}]
-    return []
-
-
-@app.post("/api/elevenlabs/preview")
-async def preview_elevenlabs_voice(request: Request):
-    data = await request.json()
-    voice_id = data.get("voice_id", ELEVENLABS_VOICE_ID)
-    text = data.get("text", "Guten Tag, Sir. Jarvis zu Ihren Diensten.")
-    api_key = data.get("api_key", ELEVENLABS_API_KEY)
-
-    resp = await http.post(
-        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-        headers={"xi-api-key": api_key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
-        json={"text": text, "model_id": "eleven_turbo_v2_5",
-              "voice_settings": {"stability": 0.5, "similarity_boost": 0.85}},
-    )
-    if resp.status_code == 200:
-        return StreamingResponse(io.BytesIO(resp.content), media_type="audio/mpeg")
-    return StreamingResponse(io.BytesIO(b""), status_code=400, media_type="audio/mpeg")
 
 
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "frontend")), name="static")
