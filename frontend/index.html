@@ -366,7 +366,7 @@ body {
 
 <script>
 // ── State ──
-let dashboardWs = null;
+let dashboardWs  = null;
 let audioQueue   = [];
 let isPlaying    = false;
 let isListening  = false;
@@ -376,7 +376,8 @@ let recognition  = null;
 let audioContext = null;
 let analyser     = null;
 let animationId  = null;
-let currentAudio = null; // verhindert Garbage Collection während Wiedergabe
+let currentAudio = null;
+let _wsDelay     = 3000;
 
 
 const SPEECH_CORRECTIONS = {
@@ -570,6 +571,7 @@ function initWS() {
     if (dashboardWs?.readyState === WebSocket.OPEN) return;
     dashboardWs = new WebSocket(`ws://${location.host}/ws`);
     dashboardWs.onopen = () => {
+        _wsDelay = 3000;
         setOrbState('thinking');
         wsSend({ text: 'Jarvis activate' });
     };
@@ -582,7 +584,11 @@ function initWS() {
             else setTimeout(() => { setOrbState('idle'); setTimeout(startListening, 1200); }, 1000);
         }
     };
-    dashboardWs.onclose = () => setTimeout(initWS, 3000);
+    dashboardWs.onclose = () => {
+        setOrbState('idle');
+        setTimeout(initWS, _wsDelay);
+        _wsDelay = Math.min(_wsDelay * 2, 60000);
+    };
     dashboardWs.onerror = () => {};
 }
 
@@ -749,7 +755,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Now start WebSocket (Jarvis will have complete data)
     initWS();
 
-    setInterval(() => { loadMails(); loadTasks(); }, 20000);
+    const _pollId = setInterval(() => { loadMails(); loadTasks(); }, 20000);
 
     fetch('/api/version').then(r => r.json()).then(v => {
         document.getElementById('app-version').textContent = `v${v.version}`;

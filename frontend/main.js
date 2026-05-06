@@ -45,9 +45,12 @@ document.addEventListener('click', unlockAudio, { once: false });
 document.addEventListener('touchstart', unlockAudio, { once: false });
 document.addEventListener('keydown', unlockAudio, { once: false });
 
+let _wsDelay = 3000;
+
 function connect() {
     ws = new WebSocket(`ws://${location.host}/ws`);
     ws.onopen = () => {
+        _wsDelay = 3000;
         console.log('[jarvis] WebSocket connected');
         status.textContent = 'Klicke einmal irgendwo, dann spricht Jarvis.';
         setOrbState('thinking');
@@ -69,7 +72,9 @@ function connect() {
     };
     ws.onclose = () => {
         status.textContent = 'Verbindung verloren...';
-        setTimeout(connect, 3000);
+        setOrbState('idle');
+        setTimeout(connect, _wsDelay);
+        _wsDelay = Math.min(_wsDelay * 2, 60000);
     };
 }
 
@@ -102,18 +107,24 @@ function playNext() {
     const audio = new Audio(url);
     audio.onended = () => { URL.revokeObjectURL(url); playNext(); };
     audio.onerror = () => { URL.revokeObjectURL(url); playNext(); };
-    audio.play().catch(err => {
+    audio.play().catch(() => {
+        isPlaying = false;
         console.warn('[jarvis] Autoplay blocked, waiting for click...');
         status.textContent = 'Klicke irgendwo damit Jarvis sprechen kann.';
         setOrbState('idle');
-        // Wait for click then retry
-        document.addEventListener('click', function retry() {
+        audioQueue.unshift(b64);
+        URL.revokeObjectURL(url);
+        const timeout = setTimeout(() => {
             document.removeEventListener('click', retry);
-            audio.play().then(() => {
-                setOrbState('speaking');
-                status.textContent = '';
-            }).catch(() => playNext());
-        });
+            audioQueue.shift();
+            setOrbState('idle');
+        }, 30000);
+        function retry() {
+            clearTimeout(timeout);
+            document.removeEventListener('click', retry);
+            playNext();
+        }
+        document.addEventListener('click', retry);
     });
 }
 

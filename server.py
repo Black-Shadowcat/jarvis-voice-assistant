@@ -21,7 +21,7 @@ import anthropic
 import httpx
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
 
 # Load config
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
@@ -590,22 +590,27 @@ async def synthesize_speech(text: str, voice_id: Optional[str] = None) -> bytes:
     async def _tts_chunk(chunk: str) -> bytes:
         vid = voice_id or ELEVENLABS_VOICE_ID
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{vid}"
-        try:
-            resp = await http.post(url, headers={
-                "xi-api-key": ELEVENLABS_API_KEY,
-                "Content-Type": "application/json",
-                "Accept": "audio/mpeg",
-            }, json={
-                "text": chunk,
-                "model_id": "eleven_turbo_v2_5",
-                "voice_settings": {"stability": 0.5, "similarity_boost": 0.85},
-            })
-            if resp.status_code == 200:
-                print(f"  TTS OK: {len(resp.content)} bytes", flush=True)
-                return resp.content
-            print(f"  TTS error: {resp.status_code} {resp.text[:100]}", flush=True)
-        except Exception as e:
-            print(f"  TTS EXCEPTION: {e}", flush=True)
+        payload = {
+            "text": chunk,
+            "model_id": "eleven_turbo_v2_5",
+            "voice_settings": {"stability": 0.5, "similarity_boost": 0.85},
+        }
+        headers = {
+            "xi-api-key": ELEVENLABS_API_KEY,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg",
+        }
+        for attempt in range(2):
+            try:
+                resp = await http.post(url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    print(f"  TTS OK: {len(resp.content)} bytes", flush=True)
+                    return resp.content
+                print(f"  TTS error ({attempt+1}/2): {resp.status_code} {resp.text[:100]}", flush=True)
+            except Exception as e:
+                print(f"  TTS EXCEPTION ({attempt+1}/2): {e}", flush=True)
+            if attempt == 0:
+                await asyncio.sleep(1)
         return b""
 
     parts = await asyncio.gather(*[_tts_chunk(c) for c in chunks])
@@ -1515,7 +1520,7 @@ async def serve_index():
 
 @app.get("/dashboard")
 async def serve_dashboard():
-    return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "dashboard.html"))
+    return RedirectResponse(url="/", status_code=301)
 
 
 async def startup_and_refresh():
