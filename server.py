@@ -403,6 +403,13 @@ conversations: dict[str, list] = {}
 active_connections: set = set()
 
 
+def _obsidian_note_done(content: str) -> bool:
+    """True if the note has checkboxes and all of them are checked."""
+    import re
+    unchecked = re.findall(r"- \[ \]", content)
+    checked   = re.findall(r"- \[[xX]\]", content)
+    return bool(checked) and not unchecked
+
 def get_obsidian_info_sync() -> list[str]:
     if not OBSIDIAN_INBOX:
         return []
@@ -411,7 +418,9 @@ def get_obsidian_info_sync() -> list[str]:
         notes = []
         for fname in files:
             with open(os.path.join(OBSIDIAN_INBOX, fname), "r", encoding="utf-8") as f:
-                notes.append(f.read().strip())
+                content = f.read().strip()
+            if not _obsidian_note_done(content):
+                notes.append(content)
         return notes
     except Exception:
         return []
@@ -1276,7 +1285,8 @@ async def get_obsidian_notes():
             try:
                 with open(fpath, "r", encoding="utf-8") as f:
                     content = f.read().strip()
-                # Use first 100 chars as preview, filename as title
+                if _obsidian_note_done(content):
+                    continue
                 title = fname.replace(".md", "").replace("_", " ")
                 preview = content[:100] + ("..." if len(content) > 100 else "")
                 notes.append({
