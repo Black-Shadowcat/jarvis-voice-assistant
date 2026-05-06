@@ -160,7 +160,8 @@ def _parse_licht(payload: str):
 
     return cmd, brightness, key, room_str
 
-_last_licht_room: str | None = None  # tracks last room for context-aware follow-up replies
+_last_licht_room: str | None = None
+_licht_room_lock = asyncio.Lock()
 
 # ── Structured Output Models ───────────────────────────────────────────────
 # raum uses str (not Literal) to accept all LIGHT_MAP keys; validated at runtime.
@@ -408,6 +409,7 @@ TASKS_INFO = []
 MAIL_INFO = []
 CALENDAR_INFO = []
 OBSIDIAN_INFO: list[str] = []
+_mail_lock = asyncio.Lock()
 # Data is loaded async in startup_and_refresh() — no blocking call at import time
 
 # Action parsing
@@ -791,8 +793,9 @@ end tell'''
         sir = f", {USER_ADDRESS}"
 
         global _last_licht_room
-        same_room = (room_key == _last_licht_room)
-        _last_licht_room = room_key
+        async with _licht_room_lock:
+            same_room = (room_key == _last_licht_room)
+            _last_licht_room = room_key
 
         if cmd == "turn_off":
             if same_room:
@@ -1007,8 +1010,9 @@ async def handle_licht_structured(params: LichtParameters) -> str:
     sir = f", {USER_ADDRESS}"
 
     global _last_licht_room
-    same_room = (key == _last_licht_room)
-    _last_licht_room = key
+    async with _licht_room_lock:
+        same_room = (key == _last_licht_room)
+        _last_licht_room = key
 
     if cmd == "turn_off":
         if same_room:
@@ -1130,7 +1134,9 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
     # Refresh mail cache live for greetings so the count is always accurate
     if "jarvis activate" in user_text.lower():
         loop = asyncio.get_event_loop()
-        MAIL_INFO = await loop.run_in_executor(None, get_mail_sync)
+        fresh = await loop.run_in_executor(None, get_mail_sync)
+        async with _mail_lock:
+            MAIL_INFO = fresh
 
     conversations[session_id].append({"role": "user", "content": user_text})
     history = conversations[session_id][-16:]

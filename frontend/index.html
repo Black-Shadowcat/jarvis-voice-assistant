@@ -7,11 +7,20 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%230a0e27' stroke='%2300aaff' stroke-width='2'/><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' fill='%2300aaff' font-size='10' font-family='monospace'>J</text></svg>">
 
 <style>
+:root {
+    --bg:     #0a0e27;
+    --text:   #e0e0e0;
+    --accent: #2a9ee2;
+    --green:  #4cbf7e;
+    --purple: #a78bfa;
+    --gold:   #d4af37;
+}
+
 * { margin:0; padding:0; box-sizing:border-box; }
 
 body {
-    background:#0a0e27;
-    color:#e0e0e0;
+    background:var(--bg);
+    color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     height:100vh;
     overflow:hidden;
@@ -51,7 +60,7 @@ body {
 .panel-title {
     font-size:0.8rem;
     letter-spacing:.08em;
-    color:#2a9ee2;
+    color:var(--accent);
     text-transform:uppercase;
     display:flex;
     align-items:center;
@@ -94,14 +103,14 @@ body {
 }
 .list-item:hover {
     background:rgba(42,158,226,0.12);
-    border-left-color:#2a9ee2;
+    border-left-color:var(--accent);
     transform:translateX(4px);
 }
 
 .list-icon {
     width:18px;
     text-align:center;
-    color:#2a9ee2;
+    color:var(--accent);
     opacity:0.7;
     font-size:0.9rem;
     flex-shrink:0;
@@ -109,18 +118,18 @@ body {
 
 .list-title { font-size:0.85rem; font-weight:500; }
 .list-sub { font-size:0.75rem; color:#888; margin-top:2px; }
-.list-sender { font-size:0.75rem; font-weight:600; color:#4cbf7e; text-transform:uppercase; letter-spacing:.04em; }
+.list-sender { font-size:0.75rem; font-weight:600; color:var(--green); text-transform:uppercase; letter-spacing:.04em; }
 
 /* Task checkbox */
-.task-cb { flex-shrink:0; accent-color:#4cbf7e; cursor:pointer; }
-.task-cb.obsidian { accent-color:#a78bfa; }
-.task-source { font-size:0.7rem; color:#4cbf7e; text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
-.task-source.obsidian { color:#a78bfa; }
+.task-cb { flex-shrink:0; accent-color:var(--green); cursor:pointer; }
+.task-cb.obsidian { accent-color:var(--purple); }
+.task-source { font-size:0.7rem; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
+.task-source.obsidian { color:var(--purple); }
 
 /* Badge */
 .badge {
-    background:#4cbf7e;
-    color:#0a0e27;
+    background:var(--green);
+    color:var(--bg);
     padding:2px 7px;
     border-radius:10px;
     font-size:0.65rem;
@@ -134,8 +143,6 @@ body {
     padding:24px 20px;
     font-size:0.85rem;
 }
-
-/* ── Aktivierungs-Overlay ── */
 
 /* ── Outline Icons ── */
 .icon {
@@ -179,7 +186,7 @@ body {
 
 #main-ring {
     transition:stroke 0.3s, opacity 0.3s;
-    stroke:#d4af37;
+    stroke:var(--gold);
     opacity:0.6;
     transform-origin:250px 250px;
 }
@@ -206,11 +213,11 @@ body {
 }
 .msg.jarvis {
     background:rgba(76,191,126,0.08);
-    border-color:#4cbf7e;
+    border-color:var(--green);
 }
 .msg.user {
     background:rgba(42,158,226,0.08);
-    border-color:#2a9ee2;
+    border-color:var(--accent);
 }
 .msg strong { font-size:0.75rem; text-transform:uppercase; letter-spacing:.05em; }
 
@@ -225,12 +232,12 @@ body {
 .chat-input-row.visible {
     display:flex;
 }
-#chat-toggle.active { opacity:1; color:#2a9ee2; }
+#chat-toggle.active { opacity:1; color:var(--accent); }
 #jarvis-input {
     flex:1;
     background:rgba(10,14,39,0.6);
     border:1px solid rgba(42,158,226,0.2);
-    color:#e0e0e0;
+    color:var(--text);
     padding:8px 12px;
     border-radius:6px;
     font-size:0.85rem;
@@ -240,7 +247,7 @@ body {
 #jarvis-send {
     background:rgba(42,158,226,0.15);
     border:1px solid rgba(42,158,226,0.3);
-    color:#2a9ee2;
+    color:var(--accent);
     padding:8px 14px;
     border-radius:6px;
     cursor:pointer;
