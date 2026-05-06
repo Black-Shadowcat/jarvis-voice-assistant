@@ -27,8 +27,15 @@ from fastapi.responses import FileResponse, StreamingResponse
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
 VOICE_PATH  = os.path.join(os.path.dirname(__file__), "voice.json")
 
-with open(CONFIG_PATH, "r") as f:
-    config = json.load(f)
+try:
+    with open(CONFIG_PATH, "r") as f:
+        config = json.load(f)
+except FileNotFoundError:
+    print("[jarvis] FEHLER: config.json nicht gefunden. Bitte 'cp config.example.json config.json' ausführen.", flush=True)
+    raise SystemExit(1)
+except json.JSONDecodeError as e:
+    print(f"[jarvis] FEHLER: config.json ist kein gültiges JSON: {e}", flush=True)
+    raise SystemExit(1)
 
 def _load_voice_db() -> dict:
     """Load voice.json — fallback to config.json voice id if file missing."""
@@ -36,22 +43,29 @@ def _load_voice_db() -> dict:
         with open(VOICE_PATH, "r") as f:
             return json.load(f)
     except FileNotFoundError:
-        fallback_id = config.get("elevenlabs_voice_id", "rDmv3mOhK6TnhYWckFaD")
+        fallback_id = config.get("elevenlabs_voice_id", "")
         return {"active_voice_id": fallback_id, "voices": [{"name": "Standard", "voice_id": fallback_id}]}
 
 _voice_db = _load_voice_db()
 
-ANTHROPIC_API_KEY = config["anthropic_api_key"]
-ELEVENLABS_API_KEY = config["elevenlabs_api_key"]
-ELEVENLABS_VOICE_ID = _voice_db["active_voice_id"]
-USER_NAME = config.get("user_name", "Julian")
+ANTHROPIC_API_KEY  = config.get("anthropic_api_key", "")
+ELEVENLABS_API_KEY = config.get("elevenlabs_api_key", "")
+ELEVENLABS_VOICE_ID = _voice_db.get("active_voice_id", "")
+
+_missing = [k for k, v in [("anthropic_api_key", ANTHROPIC_API_KEY), ("elevenlabs_api_key", ELEVENLABS_API_KEY)] if not v or v.startswith("YOUR_")]
+if _missing:
+    print(f"[jarvis] FEHLER: Pflicht-Keys fehlen in config.json: {', '.join(_missing)}", flush=True)
+    print("[jarvis] Bitte config.json befüllen oder Config UI unter http://localhost:8340/config aufrufen.", flush=True)
+    raise SystemExit(1)
+
+USER_NAME = config.get("user_name", "")
 USER_ADDRESS = config.get("user_address", "Sir")
 CITY = config.get("city", "Hamburg")
 LAT = config.get("lat", 53.55)
 LON = config.get("lon", 10.00)
 KACHELMANN_KEY = config.get("kachelmann_api_key", "")
 OBSIDIAN_INBOX = config.get("obsidian_inbox_path", "")
-HA_URL = config.get("ha_url", "").rstrip("/")
+HA_URL = config.get("ha_url", "").rstrip("/") if config.get("ha_enabled", True) else ""
 HA_TOKEN = config.get("ha_token", "")
 WAKE_GREETING_ENABLED = config.get("wake_greeting_enabled", True)
 
@@ -1452,7 +1466,7 @@ async def save_config_api(request: Request):
     LAT = cfg.get("lat", LAT)
     LON = cfg.get("lon", LON)
     KACHELMANN_KEY = cfg.get("kachelmann_api_key", KACHELMANN_KEY)
-    HA_URL = cfg.get("ha_url", "").rstrip("/")
+    HA_URL = cfg.get("ha_url", "").rstrip("/") if cfg.get("ha_enabled", True) else ""
     HA_TOKEN = cfg.get("ha_token", HA_TOKEN)
     WAKE_GREETING_ENABLED = cfg.get("wake_greeting_enabled", True)
     ai = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)

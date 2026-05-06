@@ -1,25 +1,17 @@
 {
   "anthropic_api_key": "YOUR_ANTHROPIC_API_KEY",
   "elevenlabs_api_key": "YOUR_ELEVENLABS_API_KEY",
-  "elevenlabs_voice_id": "YOUR_VOICE_ID",
   "user_name": "YOUR_NAME",
   "user_address": "Sir",
-  "city": "Hamburg",
+  "city": "YOUR_CITY",
   "lat": 53.55,
   "lon": 10.00,
-  "kachelmann_api_key": "YOUR_KACHELMANN_API_KEY",
+  "kachelmann_api_key": "",
   "ha_url": "http://YOUR_HA_IP:8123",
   "ha_token": "YOUR_HA_LONG_LIVED_TOKEN",
-  "ha_enabled": true,
+  "ha_enabled": false,
   "workspace_path": "/Users/YOUR_USERNAME/jarvis-voice-assistant",
-  "spotify_track": "spotify:track:YOUR_TRACK_ID",
-  "browser_url": "https://your-website.com",
-  "obsidian_inbox_path": "/Users/YOUR_USERNAME/Documents/Obsidian/Inbox",
-  "apps": ["Mail", "Safari", "Visual Studio Code", "Music"],
-  "window_layout": {
-    "top_right":    "Visual Studio Code",
-    "bottom_left":  "Mail",
-    "bottom_right": "Home Assistant"
-  },
+  "obsidian_inbox_path": "",
+  "programs": [null, null, null, null, null, null],
   "wake_greeting_enabled": true
 }
