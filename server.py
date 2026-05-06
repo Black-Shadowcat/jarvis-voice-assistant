@@ -768,20 +768,7 @@ end tell'''
             except Exception as e:
                 return f"Home Assistant Fehler: {e}"
 
-        _ROOM_DISPLAY = {
-            "büro": "Büro", "buro": "Büro", "buero": "Büro",
-            "arbeitszimmer": "Büro", "arbeitsraum": "Büro", "office": "Büro", "studio": "Büro",
-            "küche": "Küche", "kuche": "Küche", "kueche": "Küche", "kitchen": "Küche",
-            "alle": "Alle Lichter", "alles": "Alle Lichter",
-            "ueberall": "Alle Lichter", "überall": "Alle Lichter", "gesamt": "Alle Lichter",
-            "wohnzimmer": "Wohnzimmer", "wohnraum": "Wohnzimmer", "living": "Wohnzimmer",
-            "flur": "Flur", "gang": "Flur", "eingang": "Flur", "diele": "Flur", "hallway": "Flur",
-            "schlafzimmer": "Schlafzimmer", "schlafraum": "Schlafzimmer", "bedroom": "Schlafzimmer",
-            "balkon": "Balkon", "terrasse": "Balkon",
-            "sideboard": "Sideboard", "nachtschrank": "Nachtschrank",
-            "iris": "Iris", "hue go": "Hue Go", "go": "Hue Go",
-        }
-        room_label = _ROOM_DISPLAY.get(room_key, room_key.capitalize())
+        room_label = _ROOM_DISPLAY_SHARED.get(room_key, room_key.capitalize())
         sir = f", {USER_ADDRESS}"
 
         global _last_licht_room
