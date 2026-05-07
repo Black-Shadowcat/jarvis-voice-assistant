@@ -151,7 +151,7 @@ class DailyBrief:
 
         parts = [f"Guten Morgen, {user_address}."]
         if weather:
-            parts.append(weather)
+            parts.append(weather.rstrip(".") + ".")
         if mails:
             parts.append(f"Sie haben {len(mails)} ungelesene {'Mail' if len(mails) == 1 else 'Mails'}.")
         if tasks or reminders:

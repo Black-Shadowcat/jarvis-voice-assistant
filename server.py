@@ -22,6 +22,7 @@ import httpx
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
+from systems.daily_brief import DailyBrief
 
 # Load config
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
@@ -162,6 +163,8 @@ def _parse_licht(payload: str):
 
 _last_licht_room: str | None = None
 _licht_room_lock = asyncio.Lock()
+
+daily_brief = DailyBrief()
 
 # ── Structured Output Models ───────────────────────────────────────────────
 # raum uses str (not Literal) to accept all LIGHT_MAP keys; validated at runtime.
@@ -1396,19 +1399,133 @@ async def open_app(request: Request):
         return {"success": False, "message": f"Error: {str(e)}"}
 
 
+# ── Daily Brief Endpoints ──────────────────────────────────────────────────
+
+@app.get("/api/daily_brief")
+async def get_daily_brief():
+    """Determine active trigger and return briefing text."""
+    daily_brief.load()
+    loop = asyncio.get_event_loop()
+
+    if daily_brief.detect_morning_trigger():
+        mails_raw = await loop.run_in_executor(None, get_mail_sync)
+        mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
+        tasks = get_tasks_sync()
+        notes = get_obsidian_info_sync()
+        weather_str = WEATHER_INFO or ""
+        text = daily_brief.generate_morning_brief(
+            weather=weather_str,
+            mails=mails,
+            tasks=tasks,
+            reminders=[],
+            notes=notes,
+            user_address=USER_ADDRESS,
+        )
+        return {"trigger": "morning", "text": text, "spoken": bool(text)}
+
+    if daily_brief.detect_long_absence():
+        mails_raw = await loop.run_in_executor(None, get_mail_sync)
+        mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
+        text = daily_brief.generate_absence_brief(mails, USER_ADDRESS)
+        return {"trigger": "long_absence", "text": text, "spoken": bool(text)}
+
+    if daily_brief.detect_pause_return():
+        mails_raw = await loop.run_in_executor(None, get_mail_sync)
+        mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
+        text = daily_brief.generate_pause_brief(mails, USER_ADDRESS)
+        return {"trigger": "pause", "text": text, "spoken": bool(text)}
+
+    if daily_brief.detect_evening_trigger():
+        mails_raw = await loop.run_in_executor(None, get_mail_sync)
+        mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
+        text = daily_brief.generate_evening_brief(mails, WEATHER_INFO or "", USER_ADDRESS)
+        return {"trigger": "evening", "text": text, "spoken": bool(text)}
+
+    return {"trigger": "none", "text": "", "spoken": False}
+
+
+@app.post("/api/daily_brief/manual")
+async def manual_daily_brief(request: Request):
+    """Manually trigger a specific briefing (e.g. 'evening')."""
+    data = await request.json()
+    trigger = data.get("trigger", "")
+    loop = asyncio.get_event_loop()
+
+    mails_raw = await loop.run_in_executor(None, get_mail_sync)
+    mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
+
+    if trigger == "morning":
+        tasks = get_tasks_sync()
+        notes = get_obsidian_info_sync()
+        text = daily_brief.generate_morning_brief(WEATHER_INFO or "", mails, tasks, [], notes, USER_ADDRESS)
+    elif trigger == "evening":
+        text = daily_brief.generate_evening_brief(mails, WEATHER_INFO or "", USER_ADDRESS)
+    elif trigger == "absence":
+        text = daily_brief.generate_absence_brief(mails, USER_ADDRESS)
+    elif trigger == "reset":
+        daily_brief.reset()
+        return {"trigger": "reset", "text": "Tagesgedächtnis zurückgesetzt.", "spoken": True}
+    else:
+        return {"error": f"Unbekannter Trigger: {trigger}"}
+
+    return {"trigger": trigger, "text": text, "spoken": bool(text)}
+
+
+@app.get("/api/daily_brief/memory")
+async def get_daily_brief_memory():
+    """Debug endpoint — returns full daily brief state."""
+    return daily_brief.get_state()
+
+
 @app.post("/api/wake")
 async def wake_notification():
     """Called by wake-monitor.py when system wakes from sleep."""
     global OBSIDIAN_INFO
     OBSIDIAN_INFO = get_obsidian_info_sync()
     print(f"[jarvis] Wake: {len(OBSIDIAN_INFO)} Obsidian-Notizen", flush=True)
-    if WAKE_GREETING_ENABLED and OBSIDIAN_INFO and active_connections:
+
+    if not active_connections:
+        return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
+
+    # Daily Brief takes priority over generic wake greeting
+    daily_brief.load()
+    loop = asyncio.get_event_loop()
+    brief_text = ""
+
+    if daily_brief.detect_morning_trigger():
+        mails_raw = await loop.run_in_executor(None, get_mail_sync)
+        mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
+        tasks = get_tasks_sync()
+        brief_text = daily_brief.generate_morning_brief(
+            weather=WEATHER_INFO or "", mails=mails, tasks=tasks,
+            reminders=[], notes=OBSIDIAN_INFO, user_address=USER_ADDRESS,
+        )
+        print(f"[jarvis] Wake → Morning Brief", flush=True)
+    elif daily_brief.detect_long_absence():
+        mails_raw = await loop.run_in_executor(None, get_mail_sync)
+        mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
+        brief_text = daily_brief.generate_absence_brief(mails, USER_ADDRESS)
+        print(f"[jarvis] Wake → Long Absence Brief", flush=True)
+    elif daily_brief.detect_pause_return():
+        mails_raw = await loop.run_in_executor(None, get_mail_sync)
+        mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
+        brief_text = daily_brief.generate_pause_brief(mails, USER_ADDRESS)
+        print(f"[jarvis] Wake → Pause Brief: '{brief_text}'", flush=True)
+
+    if brief_text:
+        for ws in list(active_connections):
+            try:
+                await _speak(ws, str(id(ws)), brief_text)
+            except Exception:
+                active_connections.discard(ws)
+    elif WAKE_GREETING_ENABLED and OBSIDIAN_INFO:
         prompt = f"Jarvis activate wake — weise kurz auf {len(OBSIDIAN_INFO)} offene Obsidian-Notiz(en) hin: " + " | ".join(OBSIDIAN_INFO[:3])
         for ws in list(active_connections):
             try:
                 await process_message(str(id(ws)), prompt, ws)
             except Exception:
                 active_connections.discard(ws)
+
     return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
 
 
