@@ -307,6 +307,17 @@ end tell'''
 
 
 _DE_WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+_DE_MONTHS   = ["", "Januar", "Februar", "März", "April", "Mai", "Juni",
+                 "Juli", "August", "September", "Oktober", "November", "Dezember"]
+
+
+def _spoken_date(iso: str) -> str:
+    """'2026-05-07' → '7. Mai 2026' — für TTS lesbare deutsche Datumsform."""
+    try:
+        d = datetime.strptime(iso[:10], "%Y-%m-%d")
+        return f"{d.day}. {_DE_MONTHS[d.month]} {d.year}"
+    except Exception:
+        return iso
 
 
 def _label_from_dt(dt) -> str:
@@ -501,7 +512,7 @@ def build_system_prompt():
 
 WICHTIG: Schreibe NIEMALS Regieanweisungen, Emotionen oder Tags in eckigen Klammern wie [sarcastic] [formal] [amused] [dry] oder aehnliches. Dein Sarkasmus muss REIN durch die Wortwahl kommen. Alles was du schreibst wird laut vorgelesen.
 
-AUSSPRACHE: Schreibe Temperaturen immer als "X Grad" oder "X Komma Y Grad" — niemals als "°C". Schreibe Uhrzeiten immer als "X Uhr" (z.B. "20 Uhr") oder "X Uhr Y" (z.B. "20 Uhr 5") — niemals als "20:00 Uhr" oder "20:05 Uhr".
+AUSSPRACHE: Schreibe Temperaturen immer als "X Grad" oder "X Komma Y Grad" — niemals als "°C". Schreibe Uhrzeiten immer als "X Uhr" (z.B. "20 Uhr") oder "X Uhr Y" (z.B. "20 Uhr 5") — niemals als "20:00 Uhr" oder "20:05 Uhr". Schreibe Daten IMMER als "7. Mai 2026" — niemals als "2026-05-07" oder andere ISO-Formate.
 
 Du hast die volle Kontrolle ueber den Browser von {USER_NAME}. Du kannst im Internet suchen, Webseiten oeffnen und den Bildschirm sehen. Wenn Sir dich bittet etwas nachzuschauen, zu recherchieren, zu googeln, eine Seite zu oeffnen, oder irgendetwas im Internet zu tun — nutze IMMER eine Aktion. Frag nicht ob du es tun sollst, tu es einfach.
 
@@ -710,7 +721,7 @@ async def execute_action(action: dict) -> str:
         r = results[0]
         count = len(results)
         more = f" Und {count - 1} weitere Treffer." if count > 1 else ""
-        return f"Gefunden: '{r['title']}' — {r['source']}, {r['published'][:10]}.{more}"
+        return f"Gefunden: '{r['title']}' — {r['source']}, {_spoken_date(r['published'])}.{more}"
 
     elif t == "TASKS_LIST":
         tasks = get_tasks_sync()
