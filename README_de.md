@@ -48,10 +48,11 @@ Entwickelt für macOS (Apple Silicon M4) mit [Claude Code](https://claude.ai/cod
 - **Obsidian Inbox** — Notizen schreiben, lesen, erledigen — alles per Stimme.
 - **Browser-Automatisierung** — Playwright steuert einen echten Browser: suchen, URLs öffnen, Seiteninhalte lesen.
 - **Bildschirm-Vision** — Screenshot + Claude Vision: "Was ist auf meinem Bildschirm?"
-- **Wake-from-Sleep** — Jarvis wacht automatisch nach dem Systemschlaf auf (120 Sekunden Cooldown).
+- **Daily Brief Memory System** — Ereignisgesteuerte Intelligenz: Morgen-Briefing (Wetter, Mails, Aufgaben), Pause-Brief nach >30 min Abwesenheit, Abwesenheits-Brief nach >90 min, Abend-Briefing ab 17:00. Tagesgedächtnis speichert Mail-IDs — Jarvis weiß was er bereits erwähnt hat und schweigt wenn sich nichts geändert hat.
+- **Wake-from-Sleep** — Jarvis wartet nach dem Aufwachen bis der Screen entsperrt ist, spricht dann automatisch den passenden Brief.
 - **Mikrofon-Stummschaltung in der Menüleiste** — macOS-Menüleisten-Button zum systemweiten Stummschalten.
 - **Config UI** — Alle Einstellungen (API-Keys, Stimme, Stadt etc.) im Browser unter `/config`. Kein Texteditor.
-- **Dashboard** — Unter `/dashboard`: Mails, Aufgaben, Obsidian-Notizen, HA-Lichter, App-Starter.
+- **Dashboard** — Unter `/`: Mails, Aufgaben, Obsidian-Notizen, HA-Lichter, App-Starter.
 - **launchd KeepAlive** — Server startet bei Absturz automatisch neu. Session startet beim Login.
 - **Dark/Light Mode** — Folgt automatisch der macOS-Systemdarstellung.
 
@@ -168,17 +169,19 @@ jarvis-voice-assistant/
 ├── config.json            # Persönliche Config (gitignored)
 ├── config.example.json    # Vorlage für neue Nutzer
 ├── requirements.txt       # Python-Abhängigkeiten
+├── systems/
+│   └── daily_brief.py     # Daily Brief Memory System
+├── data/
+│   ├── daily_brief_memory.json   # Tagesgedächtnis (gitignored)
+│   └── daily_brief_archive/      # Archiv vergangener Tage (gitignored)
 ├── frontend/
-│   ├── index.html         # Jarvis HUD (Chrome App Mode, Port 8340)
-│   ├── dashboard.html     # Dashboard UI (/dashboard)
+│   ├── index.html         # Jarvis Dashboard + HUD (Chrome App Mode, Port 8340)
 │   ├── config.html        # Config UI (/config)
-│   ├── config.js          # Config UI Logik
-│   ├── main.js            # Spracherkennung + WebSocket + Audio
-│   └── style.css          # Dark/Light Theme, Panel-Layouts
+│   └── config.js          # Config UI Logik
 └── scripts/
     ├── launch-session.sh  # Startet Server + Chrome + Mic-Mute Button
     ├── mic-mute-menubar.py # macOS Menüleisten-Stummschaltung
-    └── wake-monitor.py    # Wake-from-Sleep → /api/wake
+    └── wake-monitor.py    # Wake-from-Sleep → /api/wake (wartet auf Screen-Unlock)
 ```
 
 ---

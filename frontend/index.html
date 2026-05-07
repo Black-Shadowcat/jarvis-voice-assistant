@@ -575,7 +575,7 @@ function wsSend(obj) {
 }
 
 function initWS() {
-    if (dashboardWs?.readyState === WebSocket.OPEN) return;
+    if (dashboardWs && (dashboardWs.readyState === WebSocket.OPEN || dashboardWs.readyState === WebSocket.CONNECTING)) return;
     dashboardWs = new WebSocket(`ws://${location.host}/ws`);
     dashboardWs.onopen = () => {
         _wsDelay = 3000;

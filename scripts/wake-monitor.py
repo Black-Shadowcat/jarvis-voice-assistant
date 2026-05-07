@@ -8,9 +8,37 @@ import sys
 JARVIS_WAKE_URL = "http://localhost:8340/api/wake"
 
 
+def is_screen_locked() -> bool:
+    """Returns True if the screen is currently locked."""
+    try:
+        r = subprocess.run(
+            ["ioreg", "-n", "Root", "-d1"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return "CGSSessionScreenIsLocked = 1" in r.stdout
+    except Exception:
+        return False
+
+
+def wait_for_unlock(timeout: int = 120) -> bool:
+    """Blocks until screen is unlocked. Returns False if timeout exceeded."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not is_screen_locked():
+            return True
+        time.sleep(2)
+    return False
+
+
 def notify_jarvis():
-    # Wait for network and Jarvis server to be ready after wake
-    time.sleep(8)
+    unlocked = wait_for_unlock()
+    if not unlocked:
+        print("[wake-monitor] Timeout — Screen blieb gesperrt, kein Brief", flush=True)
+        return
+
+    # Small buffer after unlock so audio system is ready
+    time.sleep(3)
+
     for attempt in range(6):
         try:
             req = urllib.request.Request(JARVIS_WAKE_URL, method="POST")

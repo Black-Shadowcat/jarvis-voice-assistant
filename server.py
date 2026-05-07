@@ -14,6 +14,7 @@ import re
 import subprocess
 import threading
 import time
+from datetime import datetime
 from typing import Optional, Literal
 from pydantic import BaseModel, Field, ValidationError
 
@@ -165,6 +166,7 @@ _last_licht_room: str | None = None
 _licht_room_lock = asyncio.Lock()
 
 daily_brief = DailyBrief()
+_last_activate_spoken: Optional[datetime] = None
 
 # ── Structured Output Models ───────────────────────────────────────────────
 # raum uses str (not Literal) to accept all LIGHT_MAP keys; validated at runtime.
@@ -1130,16 +1132,51 @@ async def handle_structured_action(structured: ActionModel, ws: WebSocket, sessi
 
 async def process_message(session_id: str, user_text: str, ws: WebSocket):
     """Process message and send exactly one spoken response via WebSocket."""
-    global MAIL_INFO
+    global MAIL_INFO, _last_activate_spoken
     if session_id not in conversations:
         conversations[session_id] = []
 
-    # Refresh mail cache live for greetings so the count is always accurate
     if "jarvis activate" in user_text.lower():
+        # Debounce: suppress rapid duplicates from WS reconnects / multiple tabs
+        now = datetime.now()
+        if _last_activate_spoken and (now - _last_activate_spoken).total_seconds() < 10:
+            print(f"  Activate debounced — suppressed", flush=True)
+            return
+        _last_activate_spoken = now
+
+        # Refresh mail cache
         loop = asyncio.get_event_loop()
         fresh = await loop.run_in_executor(None, get_mail_sync)
         async with _mail_lock:
             MAIL_INFO = fresh
+
+        # Morning trigger → route through Daily Brief, not LLM
+        daily_brief.load()
+        if daily_brief.detect_morning_trigger():
+            mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]}
+                     for m in fresh if " || " in m]
+            tasks = get_tasks_sync()
+            brief_text = daily_brief.generate_morning_brief(
+                weather=WEATHER_INFO or "", mails=mails, tasks=tasks,
+                reminders=[], notes=OBSIDIAN_INFO, user_address=USER_ADDRESS,
+            )
+            print(f"[jarvis] Activate → Morning Brief spoken", flush=True)
+            await _speak(ws, session_id, brief_text)
+            return
+
+        # Morning brief already done today → short ready acknowledgment
+        if daily_brief._data.get("last_morning_brief"):
+            phrases = [
+                f"Ich bin wieder da, {USER_ADDRESS}.",
+                f"Wieder online, {USER_ADDRESS}.",
+                f"Zurück, {USER_ADDRESS}.",
+                f"Bereit, {USER_ADDRESS}.",
+            ]
+            await asyncio.sleep(0.8)
+            await _speak(ws, session_id, random.choice(phrases))
+            return
+
+        # Pre-6am or unknown state → fall through to LLM greeting
 
     conversations[session_id].append({"role": "user", "content": user_text})
     history = conversations[session_id][-16:]

@@ -23,7 +23,7 @@ Frage nach Name, Taetigkeit und bevorzugter Anrede — diese Infos gehoeren in d
 ├── CLAUDE.md                    # Diese Datei
 ├── SETUP_macOS.md               # Setup-Anleitung
 ├── README.md / README_de.md     # Projektdoku (EN/DE)
-├── version.json                 # Aktuelle Version (z.B. 2.1.1)
+├── version.json                 # Aktuelle Version (z.B. 2.1.3)
 ├── config.json                  # Persoenliche Config (gitignored)
 ├── config.example.json          # Template (alle Keys mit Defaults)
 ├── voice.json                   # ElevenLabs Voice-Config (gitignored)
@@ -32,20 +32,24 @@ Frage nach Name, Taetigkeit und bevorzugter Anrede — diese Infos gehoeren in d
 ├── server.py                    # FastAPI Backend — Hauptdatei
 ├── browser_tools.py             # Playwright Browser-Steuerung
 ├── screen_capture.py            # Screenshot + Claude Vision (SCREEN-Action)
+├── systems/
+│   ├── __init__.py              # Leer
+│   └── daily_brief.py           # Daily Brief Memory System (DailyBrief-Klasse)
+├── data/
+│   ├── daily_brief_memory.json  # Tagesgedaechtnis (gitignored, auto-reset um Mitternacht)
+│   └── daily_brief_archive/     # Archiv vergangener Tage (gitignored)
 ├── frontend/
-│   ├── index.html               # Jarvis Dashboard — Haupt-UI (/)
+│   ├── index.html               # Jarvis Dashboard — Haupt-UI (/) — alles JS/CSS inline
 │   ├── config.html              # Config UI (/config)
 │   ├── config.js                # Config UI Logik
-│   ├── handbuch.html            # Benutzerhandbuch (/handbuch)
-│   ├── main.js                  # Einfache Jarvis-UI (kein Dashboard)
-│   └── style.css                # Dark Theme (nur fuer main.js-UI)
+│   └── handbuch.html            # Benutzerhandbuch (/handbuch)
 ├── docs/
 │   ├── JARVIS_Handbuch.pdf      # PDF-Handbuch
 │   └── Jarvis-Start.mp4         # Demo-Video
 ├── scripts/
 │   ├── launch-session.sh        # Startet Server + Chrome App Mode
 │   ├── mic-mute-menubar.py      # Mic-Mute in macOS Menuleiste
-│   └── wake-monitor.py          # Wake-from-Sleep → /api/wake
+│   └── wake-monitor.py          # Wake-from-Sleep → /api/wake (wartet auf Screen-Unlock)
 └── JARVIS_Handbuch.html         # HTML-Handbuch (Quelle fuer PDF)
 ```
 
@@ -69,6 +73,10 @@ Frage nach Name, Taetigkeit und bevorzugter Anrede — diese Infos gehoeren in d
 - `/dashboard` → **301 Redirect** auf `/` (veraltet, `dashboard.html` geloescht)
 - `/ws` → WebSocket (Sprachsteuerung + TTS)
 - `/api/*` → REST-Endpoints
+- `GET /api/daily_brief` → Trigger-Detection + Briefing-Text (kein WS noetig)
+- `POST /api/daily_brief/manual` → Manueller Trigger: `{ "trigger": "morning|evening|absence|reset" }`
+- `GET /api/daily_brief/memory` → Debug: kompletter Tagesgedaechtnisstand
+- `POST /api/wake` → Von wake-monitor.py — prueft Brief-Trigger, spricht direkt via _speak()
 
 ---
 
@@ -86,14 +94,16 @@ Frage nach Name, Taetigkeit und bevorzugter Anrede — diese Infos gehoeren in d
 
 ## Wichtige Invarianten
 
-- **`main.js` nicht anfassen** ohne guten Grund — wird von der einfachen Jarvis-UI genutzt (kein Dashboard)
-- **`index.html` ist die aktive Hauptdatei** — alle State-, Audio- und WS-Fixes gehoeren dort rein
+- **`index.html` ist die aktive Hauptdatei** — alles JS/CSS inline, keine externen .js/.css fuer die Haupt-UI
+- **`main.js` und `style.css` existieren nicht mehr** — waren verwaist, in Phase 7 geloescht
 - **`dashboard.html` existiert nicht mehr** — `/dashboard` redirectet auf `/`
-- **`style.css`** gilt nur fuer die einfache UI (index.html der alten Version), nicht fuer das Dashboard
 - **Kein `config["key"]`** — immer `config.get("key", "")` verwenden
 - **TTS-Chunks** werden parallel gefeuert (`asyncio.gather`) mit einem Retry nach 1s bei Fehler
-- **WebSocket-Reconnect** laeuft mit exponentiellem Backoff (3 → 60s) in `index.html` und `main.js`
+- **WebSocket-Reconnect** laeuft mit exponentiellem Backoff (3 → 60s) in `index.html`
+- **Activate-Debounce**: "Jarvis activate" wird innerhalb von 10s nach der letzten Ausfuehrung still ignoriert (verhindert Doppel-Begruessung bei WS-Reconnect)
+- **Daily Brief Routing**: "Jarvis activate" geht NICHT mehr an den LLM fuer Morgen-Briefings — direkt durch `DailyBrief.generate_morning_brief()` → `_speak()`
 - **Action-System**: Structured Output (ActionModel via Pydantic) → `_structured_to_legacy_action()` → `execute_action()`. Nicht ohne Phase-7-Plan anfassen.
+- **Daily Brief Memory**: `data/daily_brief_memory.json` — gitignored, wird bei Datumswechsel automatisch archiviert und neu erstellt. Schwellenwerte (30/90 min) stehen in der JSON selbst.
 
 ---
 
