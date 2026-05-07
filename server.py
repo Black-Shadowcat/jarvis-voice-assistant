@@ -170,6 +170,7 @@ daily_brief = DailyBrief()
 _last_activate_spoken: Optional[datetime] = None
 _last_wake_spoken: Optional[datetime] = None
 _morning_news_text: str = ""  # spoken after morning brief — set in morning trigger path
+_last_search_url: str = ""    # URL des letzten NEWS_SEARCH-Treffers — für Follow-up-Fragen
 
 class _PrintLogger:
     def info(self, msg):    print(f"[news] {msg}", flush=True)
@@ -715,10 +716,13 @@ async def execute_action(action: dict) -> str:
         return f"{total} neue Artikel: {items}.{suffix}"
 
     elif t == "NEWS_SEARCH":
+        global _last_search_url
         results = await news.search_archive(p.strip())
         if not results:
+            _last_search_url = ""
             return f"Nichts zu '{p.strip()}' im Archiv gefunden, {USER_ADDRESS}."
         r = results[0]
+        _last_search_url = r.get('url', r.get('link', ''))
         count = len(results)
         more = f" Und {count - 1} weitere Treffer." if count > 1 else ""
         return f"Gefunden: '{r['title']}' — {r['source']}, {_spoken_date(r['published'])}.{more}"
@@ -976,7 +980,7 @@ end tell'''
 
 
 # Actions whose result is already a clean, speakable string — no second LLM call needed
-_TEMPLATE_ACTIONS = {"LICHT", "REMINDER_ADD", "REMINDER_DONE", "NOTIZ", "NOTIZ_ERLEDIGT", "OPEN_APP", "NEWS_BRIEF", "NEWS_SEARCH"}
+_TEMPLATE_ACTIONS = {"LICHT", "REMINDER_ADD", "REMINDER_DONE", "NOTIZ", "NOTIZ_ERLEDIGT", "OPEN_APP", "NEWS_BRIEF"}
 
 
 async def _speak(ws: WebSocket, session_id: str, text: str):
@@ -1341,6 +1345,16 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
         # Kein _speak(), aber History-Eintrag damit der LLM nicht im nächsten
         # Turn denkt die Aktion sei noch offen und sie wiederholt.
         conversations[session_id].append({"role": "assistant", "content": "Seite geöffnet."})
+        return
+
+    if action["type"] == "NEWS_SEARCH":
+        await _speak(ws, session_id, action_result or "Erledigt.")
+        # Stiller URL-Eintrag: LLM kann bei Follow-up-Fragen die Seite öffnen
+        if _last_search_url:
+            conversations[session_id].append({
+                "role": "assistant",
+                "content": f"[Artikel-Link: {_last_search_url} — kann mit OPEN geöffnet werden]"
+            })
         return
 
     # ── Template actions: action_result is already speakable — no LLM needed
