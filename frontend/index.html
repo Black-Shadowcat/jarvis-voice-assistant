@@ -36,6 +36,103 @@ body {
     height:100vh;
 }
 
+/* ── News ── */
+.news-item {
+    padding:8px 10px;
+    border-radius:6px;
+    background:rgba(42,158,226,0.04);
+    border:1px solid rgba(42,158,226,0.08);
+    border-left:3px solid transparent;
+    cursor:pointer;
+    transition:all 0.2s ease;
+}
+.news-item:hover {
+    background:rgba(212,175,55,0.1);
+    border-left-color:var(--gold);
+    transform:translateX(4px);
+}
+.news-source {
+    font-size:0.7rem;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    margin-bottom:3px;
+}
+.news-title { font-size:0.85rem; font-weight:500; line-height:1.35; color:var(--text); }
+.cat-apple   { color:var(--accent); }
+.cat-tech    { color:var(--green); }
+.cat-science { color:var(--purple); }
+.cat-default { color:var(--gold); }
+
+.panel-section-divider {
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 0 4px;
+    border-top:1px solid rgba(42,158,226,0.1);
+    margin-top:6px;
+    flex-shrink:0;
+    font-size:0.8rem;
+    letter-spacing:.08em;
+    color:var(--accent);
+    text-transform:uppercase;
+}
+
+/* ── News Popup ── */
+#news-popup {
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.72);
+    z-index:1000;
+    align-items:center;
+    justify-content:center;
+}
+#news-popup.open { display:flex; }
+.news-popup-box {
+    background:#0d1b2a;
+    border:1px solid rgba(42,158,226,0.3);
+    border-radius:12px;
+    padding:24px;
+    max-width:520px;
+    width:90%;
+    position:relative;
+}
+.news-popup-source {
+    font-size:0.7rem;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin-bottom:8px;
+    font-weight:700;
+}
+.news-popup-title {
+    font-size:1.05rem;
+    font-weight:600;
+    line-height:1.4;
+    margin-bottom:8px;
+    color:var(--text);
+}
+.news-popup-meta { font-size:0.72rem; color:#666; margin-bottom:18px; }
+.news-popup-actions { display:flex; gap:10px; }
+.popup-btn {
+    padding:8px 16px;
+    border-radius:6px;
+    border:none;
+    cursor:pointer;
+    font-size:0.82rem;
+    transition:opacity 0.2s;
+}
+.popup-btn:hover { opacity:0.85; }
+.popup-btn-primary { background:var(--accent); color:#fff; }
+.popup-btn-close { background:rgba(255,255,255,0.08); color:var(--text); }
+.popup-close-btn {
+    position:absolute;
+    top:12px; right:14px;
+    background:none; border:none;
+    color:#666; font-size:1.1rem;
+    cursor:pointer; line-height:1;
+}
+.popup-close-btn:hover { color:var(--text); }
+
 /* ── Panels ── */
 .panel {
     background:rgba(13,27,42,0.6);
@@ -352,7 +449,7 @@ body {
     </div>
 </div>
 
-<!-- ═════ TASKS ═════ -->
+<!-- ═════ TASKS + NEWS ═════ -->
 <div class="panel" style="grid-row:2; grid-column:2;">
     <div class="panel-header">
         <div class="panel-title">
@@ -360,14 +457,39 @@ body {
             Aufgaben
             <span class="badge" id="task-count">0</span>
         </div>
-        <span class="panel-action" onclick="openApp('Obsidian')" title="Obsidian öffnen"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <span class="panel-action" onclick="loadNews()" title="News laden"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
+            <span class="panel-action" onclick="openApp('Obsidian')" title="Obsidian öffnen"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span>
+        </div>
     </div>
-    <div class="panel-content" id="task-container">
+    <div class="panel-content" id="task-container" style="flex:1;min-height:0;">
         <div class="placeholder">Aufgaben werden geladen…</div>
+    </div>
+    <div class="panel-section-divider">
+        <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M4 22V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v18l-8-4-8 4z"/></svg>
+        Neuigkeiten
+        <span class="badge" id="news-count">—</span>
+    </div>
+    <div class="panel-content" id="news-container" style="flex:1;min-height:0;">
+        <div class="placeholder">↻ Klicke zum Laden</div>
     </div>
 </div>
 
 </div><!-- /.dashboard -->
+
+<!-- ── News Popup ── -->
+<div id="news-popup">
+    <div class="news-popup-box">
+        <button class="popup-close-btn" onclick="closeNewsPopup()">✕</button>
+        <div class="news-popup-source" id="popup-source"></div>
+        <div class="news-popup-title" id="popup-title"></div>
+        <div class="news-popup-meta" id="popup-meta"></div>
+        <div class="news-popup-actions">
+            <button class="popup-btn popup-btn-primary" onclick="openNewsArticle()">Artikel öffnen ↗</button>
+            <button class="popup-btn popup-btn-close" onclick="closeNewsPopup()">Schließen</button>
+        </div>
+    </div>
+</div>
 
 <div id="app-version" style="position:fixed;bottom:8px;right:12px;font-size:0.85rem;opacity:0.85;color:#2a9ee2;letter-spacing:.05em;pointer-events:none;z-index:9999;"></div>
 
@@ -385,6 +507,7 @@ let analyser     = null;
 let animationId  = null;
 let currentAudio = null;
 let _wsDelay     = 3000;
+let _wsIsFirst   = true;   // nur beim ersten Verbindungsaufbau "Jarvis activate" senden
 
 
 const SPEECH_CORRECTIONS = {
@@ -580,7 +703,10 @@ function initWS() {
     dashboardWs.onopen = () => {
         _wsDelay = 3000;
         setOrbState('thinking');
-        wsSend({ text: 'Jarvis activate' });
+        if (_wsIsFirst) {
+            _wsIsFirst = false;
+            wsSend({ text: 'Jarvis activate' });
+        }
     };
     dashboardWs.onmessage = e => {
         const data = JSON.parse(e.data);
@@ -751,18 +877,113 @@ async function loadPrograms() {
     }
 }
 
+// ── News ──
+let _newsArticles   = [];
+let _currentNewsUrl = '';
+let _currentNewsId  = '';
+const CAT_COLORS = { apple:'cat-apple', tech:'cat-tech', science:'cat-science' };
+
+function renderNewsPanel() {
+    const box   = document.getElementById('news-container');
+    const badge = document.getElementById('news-count');
+    badge.textContent = _newsArticles.length;
+    if (!_newsArticles.length) {
+        box.innerHTML = '<div class="placeholder" style="cursor:pointer;" onclick="loadNews()" title="Neue Artikel laden">↻ Klicke zum Laden</div>';
+        return;
+    }
+    const shown = _newsArticles.slice(0, 5);
+    box.innerHTML = shown.map((a, i) => {
+        const catClass = CAT_COLORS[a.category] || 'cat-default';
+        const title = a.title.length > 82 ? a.title.slice(0, 82) + '…' : a.title;
+        return `<div class="news-item" onclick="showNewsPopup(${i})">
+            <div class="news-source ${catClass}">${a.source}</div>
+            <div class="news-title">${title}</div>
+        </div>`;
+    }).join('');
+    if (_newsArticles.length > 5)
+        box.innerHTML += `<div class="placeholder" style="font-size:0.7rem;padding:8px">+${_newsArticles.length - 5} weitere</div>`;
+}
+
+async function loadUnreadNews() {
+    try {
+        const r = await fetch('/api/news/unread?limit=20');
+        if (!r.ok) throw new Error();
+        const { articles = [] } = await r.json();
+        _newsArticles = articles;
+        renderNewsPanel();
+    } catch {
+        document.getElementById('news-container').innerHTML = '<div class="placeholder">—</div>';
+    }
+}
+
+async function loadNews() {
+    const box   = document.getElementById('news-container');
+    const badge = document.getElementById('news-count');
+    box.innerHTML = '<div class="placeholder">Lade Feeds…</div>';
+    badge.textContent = '…';
+    try {
+        const r = await fetch('/api/news');
+        if (!r.ok) throw new Error();
+        await loadUnreadNews();
+    } catch {
+        box.innerHTML = '<div class="placeholder">Fehler beim Laden</div>';
+        badge.textContent = '!';
+    }
+}
+
+function showNewsPopup(idx) {
+    const a = _newsArticles[idx];
+    if (!a) return;
+    _currentNewsUrl = a.url;
+    _currentNewsId  = a.id;
+    const catClass  = CAT_COLORS[a.category] || 'cat-default';
+    const srcEl = document.getElementById('popup-source');
+    srcEl.className = `news-popup-source ${catClass}`;
+    srcEl.textContent = a.source;
+    document.getElementById('popup-title').textContent = a.title;
+    const date = a.published
+        ? new Date(a.published).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' })
+        : '';
+    document.getElementById('popup-meta').textContent = date;
+    document.getElementById('news-popup').classList.add('open');
+}
+
+function closeNewsPopup() {
+    document.getElementById('news-popup').classList.remove('open');
+    _currentNewsUrl = '';
+    _currentNewsId  = '';
+}
+
+function openNewsArticle() {
+    if (_currentNewsId) {
+        fetch('/api/news/read', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ article_id: _currentNewsId }) }).catch(() => {});
+        _newsArticles = _newsArticles.filter(a => a.id !== _currentNewsId);
+    }
+    if (_currentNewsUrl) window.open(_currentNewsUrl, '_blank');
+    closeNewsPopup();
+    renderNewsPanel();
+}
+
+document.addEventListener('click', e => {
+    const popup = document.getElementById('news-popup');
+    if (popup && e.target === popup) closeNewsPopup();
+});
+
 // ── Init ──
 document.addEventListener('DOMContentLoaded', async () => {
     setOrbState('idle');
     initSpeechRecognition();
 
     // Load data first, THEN initialize WebSocket
-    await Promise.all([loadMails(), loadTasks(), loadPrograms()]);
+    await Promise.all([loadMails(), loadTasks(), loadPrograms(), loadUnreadNews()]);
 
     // Now start WebSocket (Jarvis will have complete data)
     initWS();
 
     const _pollId = setInterval(() => { loadMails(); loadTasks(); }, 20000);
+
+    // Auto-fetch fresh RSS feeds on startup (delayed to not compete with WebSocket init)
+    setTimeout(() => loadNews(), 5000);
 
     fetch('/api/version').then(r => r.json()).then(v => {
         document.getElementById('app-version').textContent = `v${v.version}`;

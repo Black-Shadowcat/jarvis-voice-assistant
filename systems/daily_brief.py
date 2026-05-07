@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import shutil
 from datetime import datetime, date
 from typing import Optional
@@ -34,7 +35,7 @@ class DailyBrief:
             with open(DATA_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if data.get("date") != str(date.today()):
-                data = self._fresh_state()
+                data = self._fresh_state(preserve_from=data)
                 self._save(data)
             return data
         except (FileNotFoundError, json.JSONDecodeError):
@@ -50,9 +51,14 @@ class DailyBrief:
     def save(self) -> None:
         self._save(self._data)
 
-    def _fresh_state(self) -> dict:
+    def _fresh_state(self, preserve_from: dict = None) -> dict:
         state = json.loads(json.dumps(_EMPTY_STATE))
         state["date"] = str(date.today())
+        if preserve_from:
+            pt = preserve_from.get("pause_tracking", {})
+            for key in ("pause_threshold_minutes", "long_absence_threshold_minutes"):
+                if key in pt:
+                    state["pause_tracking"][key] = pt[key]
         return state
 
     # ── Archive & Reset ───────────────────────────────────────────────────────
@@ -64,7 +70,7 @@ class DailyBrief:
 
     def reset(self) -> None:
         self.archive()
-        self._data = self._fresh_state()
+        self._data = self._fresh_state(preserve_from=self._data)
         self.save()
 
     # ── Activity Tracking ─────────────────────────────────────────────────────
@@ -133,6 +139,22 @@ class DailyBrief:
 
     # ── Briefing Generators ───────────────────────────────────────────────────
 
+    def record_morning_brief(self, mails: list, tasks: list, reminders: list,
+                              notes: list, weather: str = "") -> None:
+        """Record morning brief state without generating text (LLM handles the greeting)."""
+        mail_ids = [f"{m.get('sender','')}_{m.get('subject','')}" for m in mails]
+        self._data["last_morning_brief"] = {
+            "timestamp": datetime.now().isoformat(),
+            "trigger": "first_activation",
+            "mail_ids_mentioned": mail_ids,
+            "mail_count_mentioned": len(mails),
+            "task_count_mentioned": len(tasks),
+            "reminder_count_mentioned": len(reminders),
+            "note_pending_mentioned": len(notes) > 0,
+            "weather_mentioned": weather,
+        }
+        self.update_activity()
+
     def generate_morning_brief(self, weather: str, mails: list, tasks: list,
                                 reminders: list, notes: list, user_address: str) -> str:
         mail_ids = [f"{m.get('sender','')}_{m.get('subject','')}" for m in mails]
@@ -149,18 +171,86 @@ class DailyBrief:
         }
         self.update_activity()
 
-        parts = [f"Guten Morgen, {user_address}."]
+        now = datetime.now()
+        hour = now.hour
+        weekday = now.weekday()  # 0=Mon, 6=Sun
+        day_names = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+
+        if hour < 11:
+            greeting = "Guten Morgen"
+        elif hour < 14:
+            greeting = "Guten Tag"
+        elif hour < 18:
+            greeting = "Guten Nachmittag"
+        else:
+            greeting = "Guten Abend"
+
+        parts = [f"{greeting}, {user_address}."]
+
+        # Day context (morning only)
+        if hour < 13:
+            day = day_names[weekday]
+            if weekday >= 5:
+                parts.append(f"Genießen Sie Ihren {day}.")
+            else:
+                parts.append(f"Es ist {day}.")
+
+        # Weather + advisory
         if weather:
             parts.append(weather.rstrip(".") + ".")
+            w = weather.lower()
+            if any(x in w for x in ["regen", "schauer", "niesel", "sprühregen"]):
+                parts.append("Vergessen Sie Ihren Schirm nicht.")
+            elif any(x in w for x in ["schnee", "eis", "frost", "glätte"]):
+                parts.append("Die Straßen könnten glatt sein — bitte vorsichtig.")
+            elif any(x in w for x in ["sturm", "gewitter", "böen", "orkan"]):
+                parts.append("Starker Wind heute — passen Sie auf sich auf.")
+            elif any(x in w for x in ["sonnig", "klar", "heiter", "wolkenlos"]):
+                parts.append("Ein schöner Tag draußen.")
+
+        # Mail
         if mails:
-            parts.append(f"Sie haben {len(mails)} ungelesene {'Mail' if len(mails) == 1 else 'Mails'}.")
-        if tasks or reminders:
-            total = len(tasks) + len(reminders)
-            parts.append(f"{total} ausstehende {'Aufgabe' if total == 1 else 'Aufgaben'}.")
+            n = len(mails)
+            if n == 1:
+                parts.append("Eine neue Mail wartet auf Sie.")
+            elif n <= 4:
+                parts.append(f"{n} ungelesene Mails.")
+            else:
+                parts.append(f"{n} ungelesene Mails in Ihrem Postfach.")
+
+        # Tasks and reminders (split for nuance)
+        if tasks and reminders:
+            t, r = len(tasks), len(reminders)
+            parts.append(
+                f"{t} {'Aufgabe' if t == 1 else 'Aufgaben'} und "
+                f"{r} {'Erinnerung' if r == 1 else 'Erinnerungen'} stehen noch aus."
+            )
+        elif tasks:
+            t = len(tasks)
+            parts.append(f"{t} {'Aufgabe' if t == 1 else 'Aufgaben'} auf der Liste.")
+        elif reminders:
+            r = len(reminders)
+            parts.append(f"{r} {'Erinnerung' if r == 1 else 'Erinnerungen'} für heute.")
+
+        # Notes
         if notes:
-            parts.append(f"{len(notes)} offene {'Notiz' if len(notes) == 1 else 'Notizen'} in Obsidian.")
+            n = len(notes)
+            parts.append(f"{n} offene {'Notiz' if n == 1 else 'Notizen'} in Obsidian.")
+
+        # Closing
         if not mails and not tasks and not reminders and not notes:
-            parts.append("Alles erledigt — ein ruhiger Start.")
+            parts.append(random.choice([
+                "Alles erledigt — ein ruhiger Start.",
+                "Keine offenen Punkte. Der Tag gehört Ihnen.",
+                "Postfach und Aufgaben: leer. Ein entspannter Beginn.",
+            ]))
+        else:
+            parts.append(random.choice([
+                "Ich stehe bereit.",
+                "Wie kann ich Ihnen behilflich sein?",
+                "Was darf ich für Sie tun?",
+                "Womit soll ich beginnen?",
+            ]))
 
         return " ".join(parts)
 
@@ -176,16 +266,32 @@ class DailyBrief:
             "deleted_count": diff["deleted_count"],
             "current_count": diff["current_count"],
         })
+        # Baseline aktualisieren — nächster Vergleich gegen aktuellen Stand, nicht Morgen
+        if self._data.get("last_morning_brief"):
+            self._data["last_morning_brief"]["mail_ids_mentioned"] = current_ids
+            self._data["last_morning_brief"]["mail_count_mentioned"] = len(current_ids)
         self.update_activity()
 
         if diff["new_count"] > 0:
             n = diff["new_count"]
-            return f"{n} neue {'Mail' if n == 1 else 'Mails'}, {user_address}."
-        if diff["deleted_count"] > 0 and diff["current_count"] > 0:
-            return f"{diff['deleted_count']} {'Mail' if diff['deleted_count'] == 1 else 'Mails'} gelesen."
-        if diff["current_count"] == 0 and diff["deleted_count"] > 0:
-            return f"Postfach leer, {user_address}."
-        return ""
+            new_ids_set = set(diff["new_ids"])
+            new_mails = [m for m in current_mails
+                         if f"{m.get('sender','')}_{m.get('subject','')}" in new_ids_set]
+            senders = [m.get("sender", "").split("<")[0].strip() or m.get("sender", "Unbekannt")
+                       for m in new_mails]
+            if n == 1:
+                return random.choice([
+                    f"Willkommen zurück, {user_address}. Eine neue Mail von {senders[0]}.",
+                    f"Eine neue Mail von {senders[0]} ist eingegangen, {user_address}.",
+                ])
+            elif n == 2:
+                return f"Willkommen zurück, {user_address}. {n} neue Mails — von {senders[0]} und {senders[1]}."
+            else:
+                return f"Willkommen zurück, {user_address}. {n} neue Mails — unter anderem von {senders[0]}."
+        return random.choice([
+            f"Willkommen zurück, {user_address}.",
+            f"Alles ruhig, {user_address}. Keine neuen Mails.",
+        ])
 
     def generate_absence_brief(self, current_mails: list, user_address: str) -> str:
         known_ids = self.get_known_mail_ids()
@@ -199,12 +305,31 @@ class DailyBrief:
             "deleted_count": diff["deleted_count"],
             "current_count": diff["current_count"],
         })
+        if self._data.get("last_morning_brief"):
+            self._data["last_morning_brief"]["mail_ids_mentioned"] = current_ids
+            self._data["last_morning_brief"]["mail_count_mentioned"] = len(current_ids)
         self.update_activity()
 
         if diff["new_count"] > 0:
             n = diff["new_count"]
-            return f"Während Sie weg waren: {n} neue {'Mail' if n == 1 else 'Mails'}, {user_address}."
-        return f"Stille im Postfach während Ihrer Abwesenheit, {user_address}."
+            new_ids_set = set(diff["new_ids"])
+            new_mails = [m for m in current_mails
+                         if f"{m.get('sender','')}_{m.get('subject','')}" in new_ids_set]
+            senders = [m.get("sender", "").split("<")[0].strip() or m.get("sender", "Unbekannt")
+                       for m in new_mails]
+            if n == 1:
+                return random.choice([
+                    f"Schön, Sie wieder zu haben, {user_address}. Eine neue Mail von {senders[0]}.",
+                    f"Willkommen zurück. Während Ihrer Abwesenheit schrieb {senders[0]}.",
+                ])
+            elif n == 2:
+                return f"Schön, Sie wieder zu haben, {user_address}. {n} neue Mails — von {senders[0]} und {senders[1]}."
+            else:
+                return f"Willkommen zurück, {user_address}. {n} neue Mails in Ihrer Abwesenheit — unter anderem von {senders[0]}."
+        return random.choice([
+            f"Schön, Sie wieder zu haben, {user_address}. Das Postfach war ruhig.",
+            f"Willkommen zurück, {user_address}. Keine neuen Mails.",
+        ])
 
     def generate_evening_brief(self, mails: list, weather: str, user_address: str) -> str:
         self._data["evening_briefing"]["done"] = True

@@ -22,8 +22,9 @@ import anthropic
 import httpx
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
+from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse, JSONResponse
 from systems.daily_brief import DailyBrief
+from systems.news_system import NewsSystem
 
 # Load config
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
@@ -167,6 +168,15 @@ _licht_room_lock = asyncio.Lock()
 
 daily_brief = DailyBrief()
 _last_activate_spoken: Optional[datetime] = None
+_last_wake_spoken: Optional[datetime] = None
+_morning_news_text: str = ""  # spoken after morning brief — set in morning trigger path
+
+class _PrintLogger:
+    def info(self, msg):    print(f"[news] {msg}", flush=True)
+    def warning(self, msg): print(f"[news] WARN: {msg}", flush=True)
+    def error(self, msg):   print(f"[news] ERROR: {msg}", flush=True)
+
+news = NewsSystem(config, _PrintLogger())
 
 # ── Structured Output Models ───────────────────────────────────────────────
 # raum uses str (not Literal) to accept all LIGHT_MAP keys; validated at runtime.
@@ -180,7 +190,7 @@ class ActionModel(BaseModel):
     action: Literal[
         "licht", "reminder_add", "reminder_done", "search", "open", "open_app", "browse",
         "mail_read", "notiz", "notiz_erledigt", "kalender", "tasks_list",
-        "notiz_list", "screen", "news", "none"
+        "notiz_list", "screen", "news", "news_brief", "news_search", "none"
     ]
     parameters: dict = Field(default_factory=dict)
     response: Optional[str] = None
@@ -403,7 +413,7 @@ def refresh_data():
     WEATHER_INFO = get_weather_sync()
     TASKS_INFO = get_tasks_sync()
     MAIL_INFO = get_mail_sync()
-    CALENDAR_INFO = get_calendar_sync(days=2)
+    CALENDAR_INFO = get_calendar_sync(days=7)
     print(f"[jarvis] Wetter: {WEATHER_INFO}", flush=True)
     print(f"[jarvis] Tasks: {len(TASKS_INFO)} geladen", flush=True)
     print(f"[jarvis] Mails: {len(MAIL_INFO)} ungelesen", flush=True)
@@ -414,6 +424,7 @@ TASKS_INFO = []
 MAIL_INFO = []
 CALENDAR_INFO = []
 OBSIDIAN_INFO: list[str] = []
+NEWS_INFO: list[dict] = []
 _mail_lock = asyncio.Lock()
 # Data is loaded async in startup_and_refresh() — no blocking call at import time
 
@@ -476,6 +487,16 @@ def build_system_prompt():
     else:
         cal_block = "\nTermine naechste 7 Tage: keine"
 
+    news_block = ""
+    if NEWS_INFO:
+        from datetime import timedelta
+        cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
+        recent = [a for a in NEWS_INFO if a.get("saved_at", "") >= cutoff]
+        pool = recent[:3] if recent else NEWS_INFO[:3]
+        headlines = [f"{a.get('source','')}: {a.get('title','')[:65]}" for a in pool if a.get('title')]
+        if headlines:
+            news_block = "\nRSS-Neuigkeiten: " + " | ".join(headlines)
+
     return f"""Du bist Jarvis, der KI-Assistent von Tony Stark aus Iron Man. Dein Dienstherr ist {USER_NAME}. Er wohnt in {CITY}. Du sprichst ausschliesslich Deutsch. {USER_NAME} moechte mit "{USER_ADDRESS}" angesprochen und gesiezt werden. Nutze "Sie" als Pronomen — FALSCH: "Sir planen", RICHTIG: "Sie planen, Sir". Dein Ton ist trocken, sarkastisch und britisch-hoeflich - wie ein Butler der alles gesehen hat und trotzdem loyal bleibt. Du machst subtile, trockene Bemerkungen, bist aber niemals respektlos. Wenn Sir eine offensichtliche Frage stellt, darfst du mit elegantem Sarkasmus antworten. Du bist hochintelligent, effizient und immer einen Schritt voraus. Halte deine Antworten kurz - maximal 3 Saetze. Du kommentierst fragwuerdige Entscheidungen hoeflich aber spitz.
 
 WICHTIG: Schreibe NIEMALS Regieanweisungen, Emotionen oder Tags in eckigen Klammern wie [sarcastic] [formal] [amused] [dry] oder aehnliches. Dein Sarkasmus muss REIN durch die Wortwahl kommen. Alles was du schreibst wird laut vorgelesen.
@@ -490,6 +511,8 @@ AKTIONEN - Wenn eine Aktion noetig ist, schreibe NUR die Aktion — keinen Text 
 [ACTION:OPEN_APP] app-name - macOS App oeffnen. Nutze diese Aktion wenn Sir eine App, ein Programm oder eine Anwendung oeffnen moechte. Beispiele: "Mail", "Safari", "Visual Studio Code", "Obsidian", "Music". Schreibe den App-Namen exakt so wie er in macOS heisst.
 [ACTION:SCREEN] - Bildschirm ansehen und beschreiben.
 [ACTION:NEWS] - Aktuelle Weltnachrichten abrufen. Nutze diese Aktion wenn nach News, Nachrichten, was in der Welt passiert, aktuelle Lage oder Weltgeschehen gefragt wird. Schreibe einen kurzen Satz davor wie "Ich schaue nach den aktuellen Nachrichten."
+[ACTION:NEWS_BRIEF] - Persoenliche RSS-Feeds abrufen und neue Artikel vorlesen. Nutze diese Aktion wenn Sir fragt ob es was Neues gibt, was es Neues aus seinen Quellen gibt, oder aehnliches.
+[ACTION:NEWS_SEARCH] stichwort - Im persoenlichen RSS-Archiv suchen. Nutze diese Aktion wenn Sir fragt "wie war das mit X", "was war da ueber Y" oder nach einem bestimmten Thema im Archiv sucht.
 [ACTION:REMINDER_ADD] aufgabe - Neue Erinnerung in die Inbox schreiben. Nutze diese Aktion wenn Sir etwas hinzufuegen, notieren, merken oder erinnert werden moechte.
 [ACTION:REMINDER_DONE] stichwort - Erinnerung als erledigt markieren. Nutze diese Aktion wenn Sir sagt dass etwas erledigt, abgehakt oder fertig ist.
 [ACTION:TASKS_LIST] - Aktuelle Aufgabenliste live aus Reminders laden und vorlesen. Nutze diese Aktion IMMER wenn Sir fragt welche Aufgaben es gibt, was auf der Liste steht, oder was noch offen ist.
@@ -507,7 +530,8 @@ Bei Lichtsteuerung:
 {{"action": "licht", "parameters": {{"raum": "buero", "zustand": "an", "helligkeit": null}}, "response": null}}
 Raeume fuer licht (kanonisch): alle, wohnzimmer, kueche, buero, flur, schlafzimmer, balkon, sideboard, nachtschrank, iris, go. Zustand: "an" oder "aus". Helligkeit: 1-100 oder null.
 Bei open_app: parameters: {{"app": "App-Name"}}. Bei allen anderen Aktionen: parameters: {{"payload": "bisheriger payload-text"}}
-Alle action-Werte: none, licht, reminder_add, reminder_done, search, open, open_app, browse, mail_read, notiz, notiz_erledigt, kalender, tasks_list, notiz_list, screen, news
+Alle action-Werte: none, licht, reminder_add, reminder_done, search, open, open_app, browse, mail_read, notiz, notiz_erledigt, kalender, tasks_list, notiz_list, screen, news, news_brief, news_search
+Bei news_search: parameters: {{"stichwort": "suchbegriff"}}
 Falls JSON nicht moeglich: altes Format [ACTION:TYP] payload bleibt gueltig.
 
 WENN {USER_NAME} "Jarvis activate" sagt:
@@ -517,10 +541,11 @@ WENN {USER_NAME} "Jarvis activate" sagt:
 - Erwaehne kurz die Anzahl ungelesener Mails. Wenn keine: lass es weg.
 - Erwaehne kurz anstehende Termine heute oder morgen, falls vorhanden.
 - Weise kurz auf offene Obsidian-Notizen hin, falls vorhanden.
+- Nenne 1-2 konkrete Schlagzeilen-Titel aus den RSS-Neuigkeiten (mit Quelle), falls vorhanden. Wortwoertlich aus den Daten zitieren, nicht umschreiben oder weglassen.
 - Sei kreativ bei der Begruessung.
 - WICHTIG: Verwende NIEMALS Action-Tags in der Begruessung. Alle Daten sind bereits in === AKTUELLE DATEN === verfuegbar — dort direkt ablesen, keine Actions ausfuehren.
 
-=== AKTUELLE DATEN ==={weather_block}{task_block}{obsidian_block}{mail_block}{cal_block}
+=== AKTUELLE DATEN ==={weather_block}{task_block}{obsidian_block}{mail_block}{cal_block}{news_block}
 ==="""
 
 
@@ -600,7 +625,7 @@ async def synthesize_speech(text: str, voice_id: Optional[str] = None) -> bytes:
         payload = {
             "text": chunk,
             "model_id": "eleven_turbo_v2_5",
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.85},
+            "voice_settings": {"stability": 0.65, "similarity_boost": 0.85},
         }
         headers = {
             "xi-api-key": ELEVENLABS_API_KEY,
@@ -662,6 +687,30 @@ async def execute_action(action: dict) -> str:
     elif t == "NEWS":
         result = await browser_tools.fetch_news()
         return result
+
+    elif t == "NEWS_BRIEF":
+        global NEWS_INFO
+        articles = await news.fetch_rss_feeds()
+        new_articles = await news.filter_duplicates(articles)
+        await news.save_to_archive(new_articles)
+        if new_articles:
+            NEWS_INFO = (new_articles + NEWS_INFO)[:10]
+        if not new_articles:
+            return f"Keine neuen Artikel seit dem letzten Abruf, {USER_ADDRESS}."
+        top3 = new_articles[:3]
+        items = " — ".join([f"{a['source']}: {a['title'][:60]}" for a in top3])
+        total = len(new_articles)
+        suffix = f" Und {total - 3} weitere." if total > 3 else ""
+        return f"{total} neue Artikel: {items}.{suffix}"
+
+    elif t == "NEWS_SEARCH":
+        results = await news.search_archive(p.strip())
+        if not results:
+            return f"Nichts zu '{p.strip()}' im Archiv gefunden, {USER_ADDRESS}."
+        r = results[0]
+        count = len(results)
+        more = f" Und {count - 1} weitere Treffer." if count > 1 else ""
+        return f"Gefunden: '{r['title']}' — {r['source']}, {r['published'][:10]}.{more}"
 
     elif t == "TASKS_LIST":
         tasks = get_tasks_sync()
@@ -916,7 +965,7 @@ end tell'''
 
 
 # Actions whose result is already a clean, speakable string — no second LLM call needed
-_TEMPLATE_ACTIONS = {"LICHT", "REMINDER_ADD", "REMINDER_DONE", "NOTIZ", "NOTIZ_ERLEDIGT", "OPEN_APP"}
+_TEMPLATE_ACTIONS = {"LICHT", "REMINDER_ADD", "REMINDER_DONE", "NOTIZ", "NOTIZ_ERLEDIGT", "OPEN_APP", "NEWS_BRIEF", "NEWS_SEARCH"}
 
 
 async def _speak(ws: WebSocket, session_id: str, text: str):
@@ -958,6 +1007,8 @@ def _structured_to_legacy_action(structured: ActionModel) -> Optional[dict]:
         "browse":         ("BROWSE",         p.get("url", p.get("payload", ""))),
         "screen":         ("SCREEN",         ""),
         "news":           ("NEWS",           ""),
+        "news_brief":     ("NEWS_BRIEF",     ""),
+        "news_search":    ("NEWS_SEARCH",    p.get("stichwort", p.get("query", p.get("payload", "")))),
         "tasks_list":     ("TASKS_LIST",     ""),
         "notiz_list":     ("NOTIZ_LIST",     ""),
         "reminder_add":   ("REMINDER_ADD",   p.get("aufgabe", p.get("text", p.get("payload", "")))),
@@ -1132,14 +1183,14 @@ async def handle_structured_action(structured: ActionModel, ws: WebSocket, sessi
 
 async def process_message(session_id: str, user_text: str, ws: WebSocket):
     """Process message and send exactly one spoken response via WebSocket."""
-    global MAIL_INFO, _last_activate_spoken
+    global MAIL_INFO, _last_activate_spoken, _morning_news_text
     if session_id not in conversations:
         conversations[session_id] = []
 
     if "jarvis activate" in user_text.lower():
         # Debounce: suppress rapid duplicates from WS reconnects / multiple tabs
         now = datetime.now()
-        if _last_activate_spoken and (now - _last_activate_spoken).total_seconds() < 10:
+        if _last_activate_spoken and (now - _last_activate_spoken).total_seconds() < 30:
             print(f"  Activate debounced — suppressed", flush=True)
             return
         _last_activate_spoken = now
@@ -1150,22 +1201,56 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
         async with _mail_lock:
             MAIL_INFO = fresh
 
-        # Morning trigger → route through Daily Brief, not LLM
+        # Morning trigger → record state, let LLM generate the rich greeting
         daily_brief.load()
+        _llm_morning = False
         if daily_brief.detect_morning_trigger():
             mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]}
                      for m in fresh if " || " in m]
             tasks = get_tasks_sync()
-            brief_text = daily_brief.generate_morning_brief(
-                weather=WEATHER_INFO or "", mails=mails, tasks=tasks,
-                reminders=[], notes=OBSIDIAN_INFO, user_address=USER_ADDRESS,
+            await _ensure_weather(loop)
+            await _ensure_calendar(loop)
+            await _ensure_news()
+            daily_brief.record_morning_brief(
+                mails=mails, tasks=tasks, reminders=[], notes=OBSIDIAN_INFO,
+                weather=_format_weather_str(WEATHER_INFO),
             )
-            print(f"[jarvis] Activate → Morning Brief spoken", flush=True)
-            await _speak(ws, session_id, brief_text)
-            return
+            # Prepare news snippet to speak after LLM brief (deterministic — no LLM creativity)
+            if NEWS_INFO:
+                top = [f"{a['source']}: {a['title'][:70]}" for a in NEWS_INFO[:2] if a.get('title')]
+                _morning_news_text = "Aus Ihren Feeds: " + " — ".join(top) + "." if top else ""
+            else:
+                _morning_news_text = ""
+            print(f"[jarvis] Activate → Morning Brief via LLM (news: {len(NEWS_INFO)} Artikel)", flush=True)
+            _llm_morning = True
 
-        # Morning brief already done today → short ready acknowledgment
-        if daily_brief._data.get("last_morning_brief"):
+        # Morning brief already done today → check pause/absence, else short acknowledgment
+        if not _llm_morning and daily_brief._data.get("last_morning_brief"):
+            if daily_brief.detect_long_absence():
+                mails_raw = await loop.run_in_executor(None, get_mail_sync)
+                async with _mail_lock:
+                    MAIL_INFO = mails_raw
+                mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]}
+                         for m in mails_raw if " || " in m]
+                text = daily_brief.generate_absence_brief(mails, USER_ADDRESS)
+                await _speak(ws, session_id, text)
+                return
+
+            if daily_brief.detect_pause_return():
+                mails_raw = await loop.run_in_executor(None, get_mail_sync)
+                async with _mail_lock:
+                    MAIL_INFO = mails_raw
+                mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]}
+                         for m in mails_raw if " || " in m]
+                text = daily_brief.generate_pause_brief(mails, USER_ADDRESS)
+                if text:
+                    await _speak(ws, session_id, text)
+                else:
+                    daily_brief.update_activity()
+                return
+
+            # No pause — simple ready acknowledgment, reset activity timer
+            daily_brief.update_activity()
             phrases = [
                 f"Ich bin wieder da, {USER_ADDRESS}.",
                 f"Wieder online, {USER_ADDRESS}.",
@@ -1176,7 +1261,7 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
             await _speak(ws, session_id, random.choice(phrases))
             return
 
-        # Pre-6am or unknown state → fall through to LLM greeting
+        # Pre-6am / unknown / morning brief → fall through to LLM greeting
 
     conversations[session_id].append({"role": "user", "content": user_text})
     history = conversations[session_id][-16:]
@@ -1196,6 +1281,11 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
         print(f"  Structured action: {structured.action}", flush=True)
         if user_text.lower().startswith("jarvis activate"):
             await _speak(ws, session_id, structured.response or reply)
+            if _morning_news_text:
+                _news_snippet = _morning_news_text
+                _morning_news_text = ""
+                await asyncio.sleep(0.6)
+                await _speak(ws, session_id, _news_snippet)
             return
         await handle_structured_action(structured, ws, session_id)
         return
@@ -1206,6 +1296,11 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
     # ── Activate greeting — no actions allowed, speak and done
     if user_text.lower().startswith("jarvis activate"):
         await _speak(ws, session_id, spoken_text)
+        if _morning_news_text:
+            _news_snippet = _morning_news_text
+            _morning_news_text = ""
+            await asyncio.sleep(0.6)
+            await _speak(ws, session_id, _news_snippet)
         return
 
     # ── No action → plain reply
@@ -1438,6 +1533,61 @@ async def open_app(request: Request):
 
 # ── Daily Brief Endpoints ──────────────────────────────────────────────────
 
+def _format_weather_str(info: dict) -> str:
+    """Format WEATHER_INFO dict to a speakable string for briefs."""
+    if not info:
+        return ""
+    temp = info.get("temp", "")
+    desc = info.get("description", "")
+    if isinstance(temp, (int, float)):
+        temp_str = f"{temp:.1f}".replace(".", ",").rstrip("0").rstrip(",")
+    else:
+        temp_str = str(temp)
+    return f"{temp_str} Grad, {desc}" if desc else f"{temp_str} Grad"
+
+
+async def _ensure_weather(loop) -> str:
+    """Return formatted weather string; fetch on-demand with retry if still None."""
+    global WEATHER_INFO
+    if WEATHER_INFO is None:
+        for attempt in range(3):
+            WEATHER_INFO = await loop.run_in_executor(None, get_weather_sync)
+            if WEATHER_INFO is not None:
+                print(f"[jarvis] Wetter on-demand geladen: {WEATHER_INFO['temp']}° (Versuch {attempt+1})", flush=True)
+                break
+            if attempt < 2:
+                await asyncio.sleep(3)
+    return _format_weather_str(WEATHER_INFO)
+
+
+async def _ensure_calendar(loop) -> None:
+    """Fetch calendar on-demand with retry if still empty (startup / HA race condition)."""
+    global CALENDAR_INFO
+    if not CALENDAR_INFO and HA_URL and HA_TOKEN:
+        for attempt in range(3):
+            CALENDAR_INFO = await loop.run_in_executor(None, lambda: get_calendar_sync(days=7))
+            if CALENDAR_INFO:
+                print(f"[jarvis] Kalender on-demand geladen: {len(CALENDAR_INFO)} Termine (Versuch {attempt+1})", flush=True)
+                break
+            if attempt < 2:
+                await asyncio.sleep(3)
+        if not CALENDAR_INFO:
+            print("[jarvis] Kalender on-demand: keine Termine oder HA nicht erreichbar", flush=True)
+
+
+async def _ensure_news() -> None:
+    """Load news archive on-demand if still empty (startup race condition)."""
+    global NEWS_INFO
+    if not NEWS_INFO:
+        try:
+            archive = await news.get_archive()
+            NEWS_INFO = archive.get("articles", [])[:10]
+            if NEWS_INFO:
+                print(f"[jarvis] RSS on-demand geladen: {len(NEWS_INFO)} Artikel", flush=True)
+        except Exception as e:
+            print(f"[jarvis] RSS on-demand Fehler: {e}", flush=True)
+
+
 @app.get("/api/daily_brief")
 async def get_daily_brief():
     """Determine active trigger and return briefing text."""
@@ -1449,7 +1599,7 @@ async def get_daily_brief():
         mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
         tasks = get_tasks_sync()
         notes = get_obsidian_info_sync()
-        weather_str = WEATHER_INFO or ""
+        weather_str = await _ensure_weather(loop)
         text = daily_brief.generate_morning_brief(
             weather=weather_str,
             mails=mails,
@@ -1475,7 +1625,7 @@ async def get_daily_brief():
     if daily_brief.detect_evening_trigger():
         mails_raw = await loop.run_in_executor(None, get_mail_sync)
         mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
-        text = daily_brief.generate_evening_brief(mails, WEATHER_INFO or "", USER_ADDRESS)
+        text = daily_brief.generate_evening_brief(mails, _format_weather_str(WEATHER_INFO), USER_ADDRESS)
         return {"trigger": "evening", "text": text, "spoken": bool(text)}
 
     return {"trigger": "none", "text": "", "spoken": False}
@@ -1494,9 +1644,9 @@ async def manual_daily_brief(request: Request):
     if trigger == "morning":
         tasks = get_tasks_sync()
         notes = get_obsidian_info_sync()
-        text = daily_brief.generate_morning_brief(WEATHER_INFO or "", mails, tasks, [], notes, USER_ADDRESS)
+        text = daily_brief.generate_morning_brief(_format_weather_str(WEATHER_INFO), mails, tasks, [], notes, USER_ADDRESS)
     elif trigger == "evening":
-        text = daily_brief.generate_evening_brief(mails, WEATHER_INFO or "", USER_ADDRESS)
+        text = daily_brief.generate_evening_brief(mails, _format_weather_str(WEATHER_INFO), USER_ADDRESS)
     elif trigger == "absence":
         text = daily_brief.generate_absence_brief(mails, USER_ADDRESS)
     elif trigger == "reset":
@@ -1517,53 +1667,315 @@ async def get_daily_brief_memory():
 @app.post("/api/wake")
 async def wake_notification():
     """Called by wake-monitor.py when system wakes from sleep."""
-    global OBSIDIAN_INFO
+    global OBSIDIAN_INFO, _last_wake_spoken
+    now = datetime.now()
+    if _last_wake_spoken and (now - _last_wake_spoken).total_seconds() < 300:
+        print(f"[jarvis] Wake debounced — suppressed", flush=True)
+        return {"status": "debounced"}
+    _last_wake_spoken = now
+
     OBSIDIAN_INFO = get_obsidian_info_sync()
     print(f"[jarvis] Wake: {len(OBSIDIAN_INFO)} Obsidian-Notizen", flush=True)
 
     if not active_connections:
         return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
 
-    # Daily Brief takes priority over generic wake greeting
     daily_brief.load()
     loop = asyncio.get_event_loop()
-    brief_text = ""
 
+    # Morgen-Brief: direkt via LLM
     if daily_brief.detect_morning_trigger():
-        mails_raw = await loop.run_in_executor(None, get_mail_sync)
-        mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
-        tasks = get_tasks_sync()
-        brief_text = daily_brief.generate_morning_brief(
-            weather=WEATHER_INFO or "", mails=mails, tasks=tasks,
-            reminders=[], notes=OBSIDIAN_INFO, user_address=USER_ADDRESS,
-        )
-        print(f"[jarvis] Wake → Morning Brief", flush=True)
-    elif daily_brief.detect_long_absence():
-        mails_raw = await loop.run_in_executor(None, get_mail_sync)
-        mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
-        brief_text = daily_brief.generate_absence_brief(mails, USER_ADDRESS)
-        print(f"[jarvis] Wake → Long Absence Brief", flush=True)
-    elif daily_brief.detect_pause_return():
-        mails_raw = await loop.run_in_executor(None, get_mail_sync)
-        mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]} for m in mails_raw if " || " in m]
-        brief_text = daily_brief.generate_pause_brief(mails, USER_ADDRESS)
-        print(f"[jarvis] Wake → Pause Brief: '{brief_text}'", flush=True)
+        await _ensure_weather(loop)
+        await _ensure_calendar(loop)
+        await _ensure_news()
+        print(f"[jarvis] Wake → Morning Brief via LLM", flush=True)
+        for ws in list(active_connections):
+            try:
+                await process_message(str(id(ws)), "Jarvis activate", ws)
+            except Exception:
+                active_connections.discard(ws)
+        return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
 
-    if brief_text:
+    # Schritt 1: sofortige Begrüßung — immer, unabhängig von Pause-Schwellenwert
+    greeting = random.choice([
+        f"Willkommen zurück, {USER_ADDRESS}.",
+        f"Schön, Sie wieder zu haben, {USER_ADDRESS}.",
+    ])
+    daily_brief.update_activity()
+    for ws in list(active_connections):
+        sid = str(id(ws))
+        if sid not in conversations:
+            conversations[sid] = []
+        try:
+            await _speak(ws, sid, greeting)
+        except Exception as e:
+            print(f"[jarvis] Wake _speak error: {e}", flush=True)
+            active_connections.discard(ws)
+    print(f"[jarvis] Wake → Greeting: '{greeting}'", flush=True)
+
+    # Schritt 2: Mail.app Zeit zum Sync geben, dann neue Mails prüfen
+    await asyncio.sleep(9)
+    mails_raw = await loop.run_in_executor(None, get_mail_sync)
+    mails = [{"sender": m.split(" || ")[0], "subject": m.split(" || ")[1]}
+             for m in mails_raw if " || " in m]
+    known_ids  = daily_brief.get_known_mail_ids()
+    current_ids = [f"{m['sender']}_{m['subject']}" for m in mails]
+    diff = daily_brief.compare_mail_ids(known_ids, current_ids)
+
+    # Baseline für nächsten Vergleich aktualisieren
+    if daily_brief._data.get("last_morning_brief"):
+        daily_brief._data["last_morning_brief"]["mail_ids_mentioned"]  = current_ids
+        daily_brief._data["last_morning_brief"]["mail_count_mentioned"] = len(current_ids)
+        daily_brief.save()
+
+    mail_text = ""
+    if diff["new_count"] > 0:
+        n = diff["new_count"]
+        new_ids_set = set(diff["new_ids"])
+        new_mails = [m for m in mails if f"{m['sender']}_{m['subject']}" in new_ids_set]
+        senders = [m.get("sender", "").split("<")[0].strip() or "Unbekannt" for m in new_mails]
+        if n == 1:
+            mail_text = f"Eine neue Mail von {senders[0]}."
+        elif n == 2:
+            mail_text = f"{n} neue Mails — von {senders[0]} und {senders[1]}."
+        else:
+            mail_text = f"{n} neue Mails — unter anderem von {senders[0]}."
+
+    if mail_text:
+        print(f"[jarvis] Wake → Mail Update: '{mail_text}'", flush=True)
         for ws in list(active_connections):
+            sid = str(id(ws))
+            if sid not in conversations:
+                conversations[sid] = []
             try:
-                await _speak(ws, str(id(ws)), brief_text)
+                await _speak(ws, sid, mail_text)
             except Exception:
                 active_connections.discard(ws)
-    elif WAKE_GREETING_ENABLED and OBSIDIAN_INFO:
-        prompt = f"Jarvis activate wake — weise kurz auf {len(OBSIDIAN_INFO)} offene Obsidian-Notiz(en) hin: " + " | ".join(OBSIDIAN_INFO[:3])
-        for ws in list(active_connections):
-            try:
-                await process_message(str(id(ws)), prompt, ws)
-            except Exception:
-                active_connections.discard(ws)
+    else:
+        print(f"[jarvis] Wake → Keine neuen Mails", flush=True)
 
     return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
+
+
+# ── News Endpoints ────────────────────────────────────────────────────────
+
+@app.get("/api/news")
+async def get_news():
+    """Fetch RSS feeds, deduplicate, archive new articles."""
+    try:
+        articles = await news.fetch_rss_feeds()
+        new_articles = await news.filter_duplicates(articles)
+        await news.save_to_archive(new_articles)
+        archive = await news.get_archive()
+        return {
+            "new_articles": new_articles,
+            "new_count": len(new_articles),
+            "total_archived": len(archive.get("articles", [])),
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        print(f"[news] ERROR in /api/news: {e}", flush=True)
+        return {"error": str(e), "status_code": 500}
+
+
+@app.get("/api/news/search")
+async def search_news(q: str = ""):
+    """Case-insensitive search over archived news articles."""
+    if not q.strip():
+        return {"found": 0, "articles": [], "query": q}
+    try:
+        results = await news.search_archive(q.strip())
+        return {"found": len(results), "articles": results, "query": q}
+    except Exception as e:
+        print(f"[news] ERROR in /api/news/search: {e}", flush=True)
+        return {"error": str(e), "status_code": 500}
+
+
+@app.post("/api/news/read")
+async def mark_news_read(request: Request):
+    """Mark an article as read by article_id."""
+    try:
+        data = await request.json()
+        article_id = data.get("article_id", "").strip()
+        if not article_id:
+            return {"error": "article_id required", "status_code": 400}
+        ok = await news.mark_as_read(article_id)
+        if ok:
+            return {"status": "read", "article_id": article_id}
+        return {"error": f"Article '{article_id}' not found", "status_code": 404}
+    except Exception as e:
+        print(f"[news] ERROR in /api/news/read: {e}", flush=True)
+        return {"error": str(e), "status_code": 500}
+
+
+@app.get("/api/news/unread")
+async def get_unread_news(limit: int = 20):
+    """Return most recent unread articles from archive — no RSS fetch."""
+    try:
+        archive = await news.get_archive()
+        unread = [a for a in archive.get("articles", []) if not a.get("read", False)]
+        unread.sort(key=lambda a: a.get("archived_at", ""), reverse=True)
+        return {"articles": unread[:limit], "total_unread": len(unread)}
+    except Exception as e:
+        print(f"[news] ERROR in /api/news/unread: {e}", flush=True)
+        return {"error": str(e), "status_code": 500}
+
+
+@app.get("/api/rss_feeds")
+async def get_rss_feeds():
+    try:
+        data = news.load_all_feeds()
+        feeds = data.get("feeds", [])
+        return {
+            "feeds": feeds,
+            "total": len(feeds),
+            "enabled_count": sum(1 for f in feeds if f.get("enabled", False)),
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/rss_feeds")
+async def bulk_save_feeds(request: Request):
+    try:
+        body = await request.json()
+        feeds = body.get("feeds", [])
+        ok = await news.save_feeds(feeds)
+        if ok:
+            return {"status": "saved", "count": len(feeds)}
+        return JSONResponse({"error": "Speichern fehlgeschlagen"}, status_code=500)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/rss_feeds/add")
+async def api_add_feed(request: Request):
+    try:
+        body = await request.json()
+        name = body.get("name", "").strip()
+        url = body.get("url", "").strip()
+        category = body.get("category", "").strip()
+        if not name or not url:
+            return JSONResponse({"error": "Name und URL erforderlich"}, status_code=400)
+        feed = await news.add_feed(name, url, category)
+        return {"status": "added", "feed": feed}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.put("/api/rss_feeds/{feed_id}/toggle")
+async def api_toggle_feed(feed_id: str):
+    try:
+        new_state = await news.toggle_feed(feed_id)
+        if new_state is None:
+            return JSONResponse({"error": "Feed nicht gefunden"}, status_code=404)
+        return {"status": "toggled", "feed_id": feed_id, "enabled": new_state}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.put("/api/rss_feeds/{feed_id}")
+async def api_update_feed(feed_id: str, request: Request):
+    try:
+        body = await request.json()
+        name = body.get("name", "").strip()
+        url = body.get("url", "").strip()
+        category = body.get("category", "").strip()
+        if not name or not url:
+            return JSONResponse({"error": "Name und URL erforderlich"}, status_code=400)
+        ok = await news.update_feed(feed_id, name, url, category)
+        if not ok:
+            return JSONResponse({"error": "Feed nicht gefunden"}, status_code=404)
+        return {"status": "updated", "feed_id": feed_id}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.delete("/api/rss_feeds/{feed_id}")
+async def api_delete_feed(feed_id: str):
+    try:
+        ok = await news.delete_feed(feed_id)
+        if not ok:
+            return JSONResponse({"error": "Feed nicht gefunden"}, status_code=404)
+        return {"status": "deleted", "feed_id": feed_id}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/maintenance/status")
+async def maintenance_status():
+    try:
+        archive = await news.get_archive()
+        article_count = len(archive.get("articles", []))
+        last_fetch = archive.get("last_fetch")
+        threshold = daily_brief._data["pause_tracking"]["pause_threshold_minutes"]
+        last_brief = daily_brief._data.get("last_morning_brief")
+        last_brief_time = (
+            last_brief["timestamp"][:16].replace("T", " ") if last_brief else None
+        )
+        return {
+            "news_articles": article_count,
+            "news_last_fetch": last_fetch,
+            "brief_threshold_minutes": threshold,
+            "brief_last_morning": last_brief_time,
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/maintenance/reset_news")
+async def maintenance_reset_news():
+    try:
+        async with news._news_lock:
+            news._write_archive({
+                "articles": [], "max_entries": 10000,
+                "cleanup_strategy": "FIFO", "last_fetch": None,
+            })
+        return {"status": "reset", "type": "news"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/maintenance/reset_brief")
+async def maintenance_reset_brief():
+    try:
+        daily_brief._data = daily_brief._fresh_state()
+        daily_brief.save()
+        return {"status": "reset", "type": "brief"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/maintenance/reset_all")
+async def maintenance_reset_all():
+    try:
+        async with news._news_lock:
+            news._write_archive({
+                "articles": [], "max_entries": 10000,
+                "cleanup_strategy": "FIFO", "last_fetch": None,
+            })
+        daily_brief._data = daily_brief._fresh_state()
+        daily_brief.save()
+        return {"status": "reset", "type": "all"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/maintenance/set_threshold")
+async def maintenance_set_threshold(request: Request):
+    try:
+        body = await request.json()
+        minutes = int(body.get("minutes", 30))
+        if not 1 <= minutes <= 480:
+            return JSONResponse(
+                {"error": "Threshold muss zwischen 1 und 480 Minuten liegen"},
+                status_code=400,
+            )
+        daily_brief._data["pause_tracking"]["pause_threshold_minutes"] = minutes
+        daily_brief.save()
+        return {"status": "saved", "threshold_minutes": minutes}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.post("/api/restart")
@@ -1694,12 +2106,19 @@ async def startup_and_refresh():
     # Tasks, mail, calendar, obsidian don't need external network — load immediately
     TASKS_INFO = await loop.run_in_executor(None, get_tasks_sync)
     MAIL_INFO = await loop.run_in_executor(None, get_mail_sync)
-    CALENDAR_INFO = await loop.run_in_executor(None, lambda: get_calendar_sync(days=2))
+    CALENDAR_INFO = await loop.run_in_executor(None, lambda: get_calendar_sync(days=7))
     OBSIDIAN_INFO = await loop.run_in_executor(None, get_obsidian_info_sync)
     print(f"[jarvis] Tasks: {len(TASKS_INFO)} geladen", flush=True)
     print(f"[jarvis] Mails: {len(MAIL_INFO)} ungelesen", flush=True)
     print(f"[jarvis] Kalender: {len(CALENDAR_INFO)} Termine (7 Tage)", flush=True)
     print(f"[jarvis] Obsidian: {len(OBSIDIAN_INFO)} offene Notizen", flush=True)
+
+    try:
+        archive = await news.get_archive()
+        NEWS_INFO = archive.get("articles", [])[:10]
+        print(f"[jarvis] RSS-Archiv: {len(NEWS_INFO)} Artikel geladen", flush=True)
+    except Exception:
+        pass
 
     # Weather requires network — retry every 30s until ready (max 20 min)
     WEATHER_INFO = await loop.run_in_executor(None, get_weather_sync)
@@ -1721,7 +2140,7 @@ async def startup_and_refresh():
         WEATHER_INFO = await loop.run_in_executor(None, get_weather_sync)
         TASKS_INFO = await loop.run_in_executor(None, get_tasks_sync)
         MAIL_INFO = await loop.run_in_executor(None, get_mail_sync)
-        CALENDAR_INFO = await loop.run_in_executor(None, lambda: get_calendar_sync(days=2))
+        CALENDAR_INFO = await loop.run_in_executor(None, lambda: get_calendar_sync(days=7))
         OBSIDIAN_INFO = await loop.run_in_executor(None, get_obsidian_info_sync)
         print(f"[jarvis] Refresh done: Tasks={len(TASKS_INFO)}, Mails={len(MAIL_INFO)}, Kalender={len(CALENDAR_INFO)}, Obsidian={len(OBSIDIAN_INFO)}", flush=True)
 

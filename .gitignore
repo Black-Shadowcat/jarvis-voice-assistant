@@ -8,3 +8,6 @@ voice.json
 .claude/settings.local.json
 data/daily_brief_memory.json
 data/daily_brief_archive/
+data/news_memory.json
+data/news_archive/
+config/rss_feeds.json

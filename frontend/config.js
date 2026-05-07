@@ -421,3 +421,309 @@ function showToast(msg, type = 'info') {
     toast.className = 'toast show ' + type;
     setTimeout(() => toast.classList.remove('show'), 3000);
 }
+
+// ── Brain Reset ───────────────────────────────────────────────────────────
+
+function openBrainResetModal() {
+    document.getElementById('brainConfirmCheck').checked = false;
+    document.getElementById('brainConfirmCheck').disabled = false;
+    const btn = document.getElementById('brainDeleteBtn');
+    btn.disabled = true;
+    btn.textContent = '🗑 JA — Gehirn löschen';
+    btn.style.background = '';
+    btn.style.color = '';
+    document.getElementById('brainResetModal').classList.add('show');
+}
+
+function closeBrainResetModal() {
+    document.getElementById('brainResetModal').classList.remove('show');
+}
+
+function brainCheckToggle() {
+    document.getElementById('brainDeleteBtn').disabled =
+        !document.getElementById('brainConfirmCheck').checked;
+}
+
+async function executeBrainReset() {
+    const btn = document.getElementById('brainDeleteBtn');
+    const check = document.getElementById('brainConfirmCheck');
+    btn.textContent = 'Lösche Erinnerungen… bitte warten';
+    btn.disabled = true;
+    check.disabled = true;
+
+    try {
+        const resp = await fetch('/api/maintenance/reset_all', {method: 'POST'});
+        if (!resp.ok) throw new Error('Server error ' + resp.status);
+
+        btn.textContent = '✅ Gehirn gelöscht. Seite lädt neu in 3 Sekunden…';
+        btn.style.background = 'rgba(76,191,126,0.15)';
+        btn.style.color = '#4cbf7e';
+        btn.style.borderColor = 'rgba(76,191,126,0.4)';
+
+        setTimeout(() => {
+            closeBrainResetModal();
+            location.reload();
+        }, 3000);
+    } catch(e) {
+        btn.textContent = '✗ Fehler — bitte nochmal versuchen';
+        btn.style.background = '';
+        btn.style.color = '#e05252';
+        btn.disabled = false;
+        check.disabled = false;
+    }
+}
+
+// ── Maintenance ───────────────────────────────────────────────────────────
+
+async function openMaintenanceModal() {
+    document.getElementById('maintenanceModal').classList.add('show');
+    await mLoadStatus();
+}
+
+function closeMaintenanceModal() {
+    document.getElementById('maintenanceModal').classList.remove('show');
+    mRestoreButtons();
+}
+
+async function mLoadStatus() {
+    try {
+        const d = await (await fetch('/api/maintenance/status')).json();
+        document.getElementById('mStatusNews').textContent = d.news_articles ?? '—';
+        document.getElementById('mStatusNewsSub').textContent = d.news_last_fetch
+            ? 'Letzter Fetch: ' + d.news_last_fetch.slice(0, 16).replace('T', ' ')
+            : 'Noch kein Fetch';
+        document.getElementById('mStatusBrief').textContent = d.brief_last_morning ?? 'Kein Brief';
+        document.getElementById('mStatusBriefSub').textContent = `Schwellenwert: ${d.brief_threshold_minutes} min`;
+        document.getElementById('mThresholdInput').value = d.brief_threshold_minutes ?? 30;
+    } catch(e) {
+        showToast('Status konnte nicht geladen werden', 'error');
+    }
+    mRestoreButtons();
+}
+
+function mRestoreButtons() {
+    document.getElementById('mBtnNews').innerHTML =
+        `<button class="btn btn-secondary" style="font-size:0.8rem;padding:7px 12px;" onclick="mAskConfirm('news')">🗑 Leeren</button>`;
+    document.getElementById('mBtnBrief').innerHTML =
+        `<button class="btn btn-secondary" style="font-size:0.8rem;padding:7px 12px;" onclick="mAskConfirm('brief')">🗑 Leeren</button>`;
+    document.getElementById('mBtnAll').innerHTML =
+        `<button class="btn btn-secondary" style="font-size:0.8rem;padding:7px 12px;border-color:rgba(224,82,82,0.4);color:#e05252;" onclick="mAskConfirm('all')">🗑 Alles</button>`;
+}
+
+function mAskConfirm(type) {
+    const ids = {news: 'mBtnNews', brief: 'mBtnBrief', all: 'mBtnAll'};
+    const el = document.getElementById(ids[type]);
+    el.innerHTML = `
+        <span style="font-size:0.8rem;color:#e05252;margin-right:8px;">Sicher?</span>
+        <button class="btn-icon btn-del" onclick="mDoReset('${type}')">Ja</button>
+        <button class="btn-icon btn-edit" onclick="mRestoreButtons()" style="margin-left:4px;">Nein</button>
+    `;
+}
+
+async function mDoReset(type) {
+    const endpoint = {news: 'reset_news', brief: 'reset_brief', all: 'reset_all'}[type];
+    try {
+        const resp = await fetch(`/api/maintenance/${endpoint}`, {method: 'POST'});
+        const data = await resp.json();
+        if (!resp.ok) { showToast(data.error || 'Fehler', 'error'); return; }
+        const label = {news: 'News-Archiv', brief: 'Daily Brief', all: 'Alles'}[type];
+        showToast(`✅ ${label} geleert`, 'success');
+        await mLoadStatus();
+    } catch(e) {
+        showToast('Fehler: ' + e.message, 'error');
+        mRestoreButtons();
+    }
+}
+
+async function mSaveThreshold() {
+    const minutes = parseInt(document.getElementById('mThresholdInput').value);
+    if (isNaN(minutes) || minutes < 1 || minutes > 480) {
+        showToast('Wert muss zwischen 1 und 480 Minuten liegen', 'error');
+        return;
+    }
+    const btn = document.getElementById('mThresholdBtn');
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = '…';
+    try {
+        const resp = await fetch('/api/maintenance/set_threshold', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({minutes})
+        });
+        const data = await resp.json();
+        if (!resp.ok) { showToast(data.error || 'Fehler', 'error'); return; }
+        showToast(`✅ Schwellenwert: ${minutes} Minuten`, 'success');
+        document.getElementById('mStatusBriefSub').textContent = `Schwellenwert: ${minutes} min`;
+    } catch(e) {
+        showToast('Fehler: ' + e.message, 'error');
+    } finally {
+        setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 2000);
+    }
+}
+
+// ── RSS Feeds Management ──────────────────────────────────────────────────
+
+let _feedsData = [];
+let _editingFeedId = null;
+
+const _catColor = { apple: '#5bb8f5', tech: '#b478ff', science: '#4cbf7e' };
+const _catBg    = { apple: 'rgba(42,158,226,0.15)', tech: 'rgba(180,120,255,0.12)', science: 'rgba(76,191,126,0.12)' };
+
+function _escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function openFeedsModal() {
+    document.getElementById('feedsModal').classList.add('show');
+    await _loadFeeds();
+}
+
+function closeFeedsModal() {
+    document.getElementById('feedsModal').classList.remove('show');
+    hideFeedForm();
+}
+
+async function _loadFeeds() {
+    try {
+        const resp = await fetch('/api/rss_feeds');
+        const data = await resp.json();
+        _feedsData = data.feeds || [];
+        _renderFeedsTable();
+    } catch(e) {
+        document.getElementById('feedsTableBody').innerHTML =
+            '<tr><td colspan="5" style="color:#e05252;text-align:center;padding:16px;">Fehler beim Laden</td></tr>';
+    }
+}
+
+function _renderFeedsTable() {
+    const tbody = document.getElementById('feedsTableBody');
+    if (!_feedsData.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:#555;text-align:center;padding:20px;">Keine Feeds konfiguriert. Klicke "+ Neuer Feed".</td></tr>';
+        return;
+    }
+    tbody.innerHTML = _feedsData.map(f => {
+        const cat     = f.category || '';
+        const enabled = f.enabled !== false;
+        const urlShort = (f.url || '').replace(/^https?:\/\//, '').slice(0, 40) + ((f.url||'').length > 46 ? '…' : '');
+        return `<tr>
+            <td class="col-name">${_escHtml(f.name || '')}</td>
+            <td class="col-url" title="${_escHtml(f.url || '')}">${_escHtml(urlShort)}</td>
+            <td><span class="feed-cat-badge" style="background:${_catBg[cat]||'rgba(255,255,255,0.06)'};color:${_catColor[cat]||'#888'}">${_escHtml(cat)||'—'}</span></td>
+            <td><div class="toggle ${enabled?'on':''}" onclick="toggleFeedEnabled('${_escHtml(f.id)}')" title="${enabled?'Deaktivieren':'Aktivieren'}"></div></td>
+            <td style="text-align:right;white-space:nowrap;">
+                <button class="btn-icon btn-edit" onclick="showFeedForm('${_escHtml(f.id)}')">✎ Edit</button>
+                <button class="btn-icon btn-del"  onclick="deleteFeed('${_escHtml(f.id)}')">✕</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function showFeedForm(feedId) {
+    _editingFeedId = feedId;
+    const box = document.getElementById('feedFormBox');
+    document.getElementById('feedFormTitle').textContent = feedId ? 'Feed bearbeiten' : 'Neuer Feed';
+    box.style.display = 'block';
+    if (feedId) {
+        const f = _feedsData.find(x => x.id === feedId);
+        if (!f) return;
+        document.getElementById('feedFormName').value     = f.name     || '';
+        document.getElementById('feedFormUrl').value      = f.url      || '';
+        document.getElementById('feedFormCategory').value = f.category || '';
+    } else {
+        document.getElementById('feedFormName').value     = '';
+        document.getElementById('feedFormUrl').value      = '';
+        document.getElementById('feedFormCategory').value = '';
+    }
+    document.getElementById('feedFormName').focus();
+}
+
+function hideFeedForm() {
+    _editingFeedId = null;
+    document.getElementById('feedFormBox').style.display = 'none';
+}
+
+async function saveFeedForm() {
+    const name     = document.getElementById('feedFormName').value.trim();
+    const url      = document.getElementById('feedFormUrl').value.trim();
+    const category = document.getElementById('feedFormCategory').value.trim();
+    if (!name) { showToast('Name erforderlich', 'error'); return; }
+    if (!url)  { showToast('URL erforderlich', 'error'); return; }
+    if (!url.startsWith('http')) { showToast('URL muss mit http/https beginnen', 'error'); return; }
+
+    try {
+        if (_editingFeedId) {
+            const resp = await fetch(`/api/rss_feeds/${_editingFeedId}`, {
+                method: 'PUT',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({name, url, category})
+            });
+            const data = await resp.json();
+            if (!resp.ok) { showToast(data.error || 'Fehler', 'error'); return; }
+            const idx = _feedsData.findIndex(f => f.id === _editingFeedId);
+            if (idx !== -1) Object.assign(_feedsData[idx], {name, url, category});
+            showToast('Feed aktualisiert', 'success');
+        } else {
+            const resp = await fetch('/api/rss_feeds/add', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({name, url, category})
+            });
+            const data = await resp.json();
+            if (!resp.ok) { showToast(data.error || 'Fehler', 'error'); return; }
+            _feedsData.push(data.feed);
+            showToast(`"${name}" hinzugefügt`, 'success');
+        }
+        hideFeedForm();
+        _renderFeedsTable();
+    } catch(e) {
+        showToast('Fehler: ' + e.message, 'error');
+    }
+}
+
+async function toggleFeedEnabled(feedId) {
+    try {
+        const resp = await fetch(`/api/rss_feeds/${feedId}/toggle`, {method: 'PUT'});
+        const data = await resp.json();
+        if (!resp.ok) { showToast(data.error || 'Fehler', 'error'); return; }
+        const f = _feedsData.find(x => x.id === feedId);
+        if (f) f.enabled = data.enabled;
+        _renderFeedsTable();
+    } catch(e) {
+        showToast('Fehler: ' + e.message, 'error');
+    }
+}
+
+async function deleteFeed(feedId) {
+    const f = _feedsData.find(x => x.id === feedId);
+    if (!confirm(`Feed "${f?.name || feedId}" wirklich löschen?`)) return;
+    try {
+        const resp = await fetch(`/api/rss_feeds/${feedId}`, {method: 'DELETE'});
+        const data = await resp.json();
+        if (!resp.ok) { showToast(data.error || 'Fehler', 'error'); return; }
+        _feedsData = _feedsData.filter(x => x.id !== feedId);
+        _renderFeedsTable();
+        showToast('Feed gelöscht', 'success');
+    } catch(e) {
+        showToast('Fehler: ' + e.message, 'error');
+    }
+}
+
+async function bulkSaveFeeds() {
+    const btn = document.getElementById('feedsSaveBtn');
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = '…';
+    try {
+        const resp = await fetch('/api/rss_feeds', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({feeds: _feedsData})
+        });
+        const data = await resp.json();
+        if (!resp.ok) { showToast(data.error || 'Fehler', 'error'); return; }
+        showToast(`✅ ${data.count} Feeds gespeichert`, 'success');
+    } catch(e) {
+        showToast('Fehler: ' + e.message, 'error');
+    } finally {
+        setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 2200);
+    }
+}
