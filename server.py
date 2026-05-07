@@ -1667,7 +1667,7 @@ async def get_daily_brief_memory():
 @app.post("/api/wake")
 async def wake_notification():
     """Called by wake-monitor.py when system wakes from sleep."""
-    global OBSIDIAN_INFO, _last_wake_spoken
+    global OBSIDIAN_INFO, _last_wake_spoken, _last_activate_spoken
     now = datetime.now()
     if _last_wake_spoken and (now - _last_wake_spoken).total_seconds() < 300:
         print(f"[jarvis] Wake debounced — suppressed", flush=True)
@@ -1697,6 +1697,9 @@ async def wake_notification():
         return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
 
     # Schritt 1: sofortige Begrüßung — immer, unabhängig von Pause-Schwellenwert
+    # _last_activate_spoken setzen damit der anschließende WS-Reconnect-"Jarvis activate"
+    # nicht noch eine zweite Ansage auslöst (der Wake-Endpoint übernimmt die Begrüßung).
+    _last_activate_spoken = now
     greeting = random.choice([
         f"Willkommen zurück, {USER_ADDRESS}.",
         f"Schön, Sie wieder zu haben, {USER_ADDRESS}.",
