@@ -321,10 +321,23 @@ _DE_ORDINALS = [
 
 
 def _spoken_date(iso: str) -> str:
-    """'2026-05-07' → 'siebten Mai 2026' — vollständig ausgeschrieben für TTS."""
+    """'2026-05-07' → 'siebten Mai zweitausendundzwanzig' — kein Digit für TTS."""
+    _ones = ["", "ein", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun",
+             "zehn", "elf", "zwölf", "dreizehn", "vierzehn", "fünfzehn", "sechzehn",
+             "siebzehn", "achtzehn", "neunzehn"]
+    _zehner = ["", "", "zwanzig", "dreißig", "vierzig", "fünfzig",
+               "sechzig", "siebzig", "achtzig", "neunzig"]
+    def _year(y):
+        if not (2000 <= y <= 2099):
+            return str(y)
+        r = y - 2000
+        if r == 0:   return "zweitausend"
+        if r <= 19:  return f"zweitausend{_ones[r]}"
+        o, t = r % 10, r // 10
+        return f"zweitausend{_ones[o]}und{_zehner[t]}" if o else f"zweitausend{_zehner[t]}"
     try:
         d = datetime.strptime(iso[:10], "%Y-%m-%d")
-        return f"{_DE_ORDINALS[d.day]} {_DE_MONTHS[d.month]} {d.year}"
+        return f"{_DE_ORDINALS[d.day]} {_DE_MONTHS[d.month]} {_year(d.year)}"
     except Exception:
         return iso
 
