@@ -170,7 +170,8 @@ daily_brief = DailyBrief()
 _last_activate_spoken: Optional[datetime] = None
 _last_wake_spoken: Optional[datetime] = None
 _morning_news_text: str = ""  # spoken after morning brief — set in morning trigger path
-_last_search_url: str = ""    # URL des letzten NEWS_SEARCH-Treffers — für Follow-up-Fragen
+_last_search_url: str = ""        # URL des letzten NEWS_SEARCH-Treffers — für Follow-up-Fragen
+_last_search_published: str = ""  # ISO-Datum des letzten Treffers — für Display-Formatierung
 
 class _PrintLogger:
     def info(self, msg):    print(f"[news] {msg}", flush=True)
@@ -318,6 +319,15 @@ _DE_ORDINALS = [
     "fünfundzwanzigsten", "sechsundzwanzigsten", "siebenundzwanzigsten", "achtundzwanzigsten",
     "neunundzwanzigsten", "dreißigsten", "einunddreißigsten",
 ]
+
+
+def _display_date(iso: str) -> str:
+    """'2026-05-07' → '07. Mai 2026' — lesbare Form für das Frontend."""
+    try:
+        d = datetime.strptime(iso[:10], "%Y-%m-%d")
+        return f"{d.day:02d}. {_DE_MONTHS[d.month]} {d.year}"
+    except Exception:
+        return iso
 
 
 def _spoken_date(iso: str) -> str:
@@ -737,13 +747,15 @@ async def execute_action(action: dict) -> str:
         return f"{total} neue Artikel: {items}.{suffix}"
 
     elif t == "NEWS_SEARCH":
-        global _last_search_url
+        global _last_search_url, _last_search_published
         results = await news.search_archive(p.strip())
         if not results:
             _last_search_url = ""
+            _last_search_published = ""
             return f"Nichts zu '{p.strip()}' im Archiv gefunden, {USER_ADDRESS}."
         r = results[0]
         _last_search_url = r.get('url', r.get('link', ''))
+        _last_search_published = r.get('published', '')
         count = len(results)
         more = f" Und {count - 1} weitere Treffer." if count > 1 else ""
         return f"Gefunden: '{r['title']}' — {r['source']}, {_spoken_date(r['published'])}.{more}"
@@ -1004,14 +1016,15 @@ end tell'''
 _TEMPLATE_ACTIONS = {"LICHT", "REMINDER_ADD", "REMINDER_DONE", "NOTIZ", "NOTIZ_ERLEDIGT", "OPEN_APP", "NEWS_BRIEF"}
 
 
-async def _speak(ws: WebSocket, session_id: str, text: str):
-    """TTS, append to history, send to client."""
+async def _speak(ws: WebSocket, session_id: str, text: str, display: str = ""):
+    """TTS, append to history, send to client.
+    display: optionaler Frontend-Text (z.B. lesbare Datumsform); fehlt er, wird text verwendet."""
     audio = await synthesize_speech(text)
     print(f"  Jarvis: {text[:100]}", flush=True)
     conversations[session_id].append({"role": "assistant", "content": text})
     await ws.send_json({
         "type": "response",
-        "text": text,
+        "text": display or text,
         "audio": base64.b64encode(audio).decode("utf-8") if audio else "",
     })
 
@@ -1369,7 +1382,14 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
         return
 
     if action["type"] == "NEWS_SEARCH":
-        await _speak(ws, session_id, action_result or "Erledigt.")
+        # Frontend: lesbare Datumsform; TTS: ausgeschriebene Form
+        display_result = action_result
+        if _last_search_published:
+            display_result = action_result.replace(
+                _spoken_date(_last_search_published),
+                _display_date(_last_search_published),
+            )
+        await _speak(ws, session_id, action_result or "Erledigt.", display=display_result)
         # Stiller URL-Eintrag: LLM kann bei Follow-up-Fragen die Seite öffnen
         if _last_search_url:
             conversations[session_id].append({
