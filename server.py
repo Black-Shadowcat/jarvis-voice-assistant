@@ -1327,6 +1327,9 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
         action_result = f"Fehler: {e}"
 
     if action["type"] == "OPEN":
+        # Kein _speak(), aber History-Eintrag damit der LLM nicht im nächsten
+        # Turn denkt die Aktion sei noch offen und sie wiederholt.
+        conversations[session_id].append({"role": "assistant", "content": "Seite geöffnet."})
         return
 
     # ── Template actions: action_result is already speakable — no LLM needed
