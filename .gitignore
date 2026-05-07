@@ -6,3 +6,5 @@ config.json
 voice.json
 *.code-workspace
 .claude/settings.local.json
+data/daily_brief_memory.json
+data/daily_brief_archive/
