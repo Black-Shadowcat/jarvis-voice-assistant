@@ -310,13 +310,21 @@ end tell'''
 _DE_WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 _DE_MONTHS   = ["", "Januar", "Februar", "März", "April", "Mai", "Juni",
                  "Juli", "August", "September", "Oktober", "November", "Dezember"]
+_DE_ORDINALS = [
+    "", "ersten", "zweiten", "dritten", "vierten", "fünften", "sechsten", "siebten",
+    "achten", "neunten", "zehnten", "elften", "zwölften", "dreizehnten", "vierzehnten",
+    "fünfzehnten", "sechzehnten", "siebzehnten", "achtzehnten", "neunzehnten", "zwanzigsten",
+    "einundzwanzigsten", "zweiundzwanzigsten", "dreiundzwanzigsten", "vierundzwanzigsten",
+    "fünfundzwanzigsten", "sechsundzwanzigsten", "siebenundzwanzigsten", "achtundzwanzigsten",
+    "neunundzwanzigsten", "dreißigsten", "einunddreißigsten",
+]
 
 
 def _spoken_date(iso: str) -> str:
-    """'2026-05-07' → '7. Mai 2026' — für TTS lesbare deutsche Datumsform."""
+    """'2026-05-07' → 'siebten Mai 2026' — vollständig ausgeschrieben für TTS."""
     try:
         d = datetime.strptime(iso[:10], "%Y-%m-%d")
-        return f"{d.day}. {_DE_MONTHS[d.month]} {d.year}"
+        return f"{_DE_ORDINALS[d.day]} {_DE_MONTHS[d.month]} {d.year}"
     except Exception:
         return iso
 
