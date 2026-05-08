@@ -2219,6 +2219,22 @@ async def serve_handbuch():
     return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "handbuch.html"))
 
 
+@app.get("/welcome")
+async def serve_welcome():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "welcome.html"))
+
+
+@app.post("/api/tts")
+async def tts_endpoint(request: Request):
+    """Synthesize a text snippet and return base64-encoded MP3. Used by welcome page."""
+    body = await request.json()
+    text = body.get("text", "").strip()
+    if not text:
+        return JSONResponse({"audio": ""})
+    audio = await synthesize_speech(text)
+    return JSONResponse({"audio": base64.b64encode(audio).decode("utf-8") if audio else ""})
+
+
 @app.get("/api/config")
 async def get_config_api():
     with open(CONFIG_PATH, "r") as f:

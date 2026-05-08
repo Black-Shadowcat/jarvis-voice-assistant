@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), version
 
 ---
 
+## [2.5.0] — 2026-05-08
+
+### Added
+- **Willkommensseite** — `/welcome` zeigt beim ersten Besuch eine futuristische Onboarding-Seite mit dreifach-rotierendem HUD-Ring, Status-Bar, Eck-Brackets und aufklappbaren Feature-Beschreibungen.
+- **Auto-TTS auf /welcome** — Jarvis begrüßt neue User beim Laden per Stimme (`user_address` wird aus Config geladen). Jedes Feature spricht beim Aufklappen seinen Steckbrief.
+- **`/api/tts` Endpoint** — `POST { "text": "..." }` → `{ "audio": "<base64 MP3>" }`. Reusable TTS-Endpoint für beliebige Seiten ohne WebSocket.
+- **Welcome-Guard in index.html** — Erster Besuch leitet automatisch auf `/welcome` um (`localStorage: jarvis_welcome_shown`). Nach Dismiss: Weiterleitung zu `/`, Jarvis sagt „Zu Ihren Diensten."
+- **Intro-Link in Config-UI** — `◎ Intro` neben Handbuch-Link; setzt localStorage zurück und öffnet `/welcome` erneut.
+
+---
+
 ## [2.4.2] — 2026-05-08
 
 ### Added
