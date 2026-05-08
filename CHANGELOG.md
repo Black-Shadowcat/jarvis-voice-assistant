@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), version
 
 ---
 
+## [2.4.2] — 2026-05-08
+
+### Added
+- **Kalender im Aufgaben-Panel** — `/api/get_tasks` liefert jetzt auch Termine für heute und morgen aus Home Assistant CalDAV. Kalender-Einträge erscheinen ohne Checkbox (nicht abhakbar), mit dem Zeit-Label als Quelle (blau).
+
+### Fixed
+- **Aussprache in Kalender-/Aktions-Antworten** — Der LLM-Summary-Aufruf für Aktionen wie KALENDER, SUCHE etc. hatte keinen AUSSPRACHE-Block. Zahlen wie "19 Uhr" oder "7. Mai 2026" wurden dadurch als Ziffern ausgegeben. Jetzt enthält auch der Summary-Prompt den AUSSPRACHE-Hint (beide Pfade: structured + legacy).
+
+---
+
 ## [2.4.1] — 2026-05-08
 
 ### Fixed

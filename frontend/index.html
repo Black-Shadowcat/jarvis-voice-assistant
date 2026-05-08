@@ -222,6 +222,8 @@ body {
 .task-cb.obsidian { accent-color:var(--purple); }
 .task-source { font-size:0.7rem; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
 .task-source.obsidian { color:var(--purple); }
+.task-source.calendar { color:var(--accent); }
+.task-cal-spacer { width:16px; flex-shrink:0; }
 
 /* Badge */
 .badge {
@@ -824,12 +826,24 @@ async function loadTasks() {
             return;
         }
 
-        const tasksHtml = tasks.map(t => `
+        const reminders = tasks.filter(t => t.source === 'reminders');
+        const calEvents = tasks.filter(t => t.source === 'calendar');
+
+        const remindersHtml = reminders.map(t => `
             <div class="list-item">
                 <input type="checkbox" class="task-cb" onchange="completeTask('${btoa(t.title)}','${t.title}',this.checked)">
                 <div>
                     <div class="list-title">${t.title}</div>
                     <div class="task-source">Reminder</div>
+                </div>
+            </div>`).join('');
+
+        const calHtml = calEvents.map(t => `
+            <div class="list-item">
+                <span class="task-cal-spacer"></span>
+                <div>
+                    <div class="list-title">${t.title}</div>
+                    <div class="task-source calendar">${t.label || 'Kalender'}</div>
                 </div>
             </div>`).join('');
 
@@ -842,7 +856,7 @@ async function loadTasks() {
                 </div>
             </div>`).join('');
 
-        box.innerHTML = tasksHtml + obsidianHtml;
+        box.innerHTML = remindersHtml + calHtml + obsidianHtml;
     } catch {
         box.innerHTML = `<div class="placeholder">${_i18n.error_load || 'Fehler beim Laden'}</div>`;
     }

@@ -1320,6 +1320,11 @@ async def handle_structured_action(structured: ActionModel, ws: WebSocket, sessi
         return
 
     # Complex actions — one-sentence LLM summary (same as legacy path)
+    _aussprache_hint = (
+        "Write all numbers, times and dates as words: 'seven o'clock' not '7:00', 'May seventh' not '7. May'. "
+        if LANGUAGE == "en" else
+        "Schreibe Zahlen, Uhrzeiten und Daten als Woerter: 'neunzehn Uhr' nicht '19 Uhr', 'siebter Mai zweitausendundzwanzig' nicht '7. Mai 2026'. "
+    )
     if action_result and "Fehler" not in action_result and "fehlgeschlagen" not in action_result:
         summary_resp = await ai.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -1329,7 +1334,8 @@ async def handle_structured_action(structured: ActionModel, ws: WebSocket, sessi
                 f"Keine Einleitung, kein 'Sehr gerne', kein 'Natuerlich', kein 'Gerne', kein 'Hier'. "
                 f"Keine Wiederholung der Anfrage. Nur die reine Information. "
                 f"Du darfst '{USER_ADDRESS}' genau einmal verwenden, bevorzugt am Satzende. "
-                f"KEINE Tags in eckigen Klammern. KEINE ACTION-Tags."
+                f"KEINE Tags in eckigen Klammern. KEINE ACTION-Tags. "
+                f"{_aussprache_hint}"
             ),
             messages=[{"role": "user", "content": action_result}],
         )
@@ -1538,6 +1544,11 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
 
     # ── Complex actions (SEARCH, NEWS, SCREEN, TASKS_LIST, KALENDER, MAIL_READ, NOTIZ_LIST):
     #    one-sentence LLM summary, no fluff
+    _aussprache_hint = (
+        "Write all numbers, times and dates as words: 'seven o'clock' not '7:00', 'May seventh' not '7. May'. "
+        if LANGUAGE == "en" else
+        "Schreibe Zahlen, Uhrzeiten und Daten als Woerter: 'neunzehn Uhr' nicht '19 Uhr', 'siebter Mai zweitausendundzwanzig' nicht '7. Mai 2026'. "
+    )
     if action_result and "Fehler" not in action_result and "fehlgeschlagen" not in action_result:
         summary_resp = await ai.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -1547,7 +1558,8 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
                 f"Keine Einleitung, kein 'Sehr gerne', kein 'Natuerlich', kein 'Gerne', kein 'Hier'. "
                 f"Keine Wiederholung der Anfrage. Nur die reine Information. "
                 f"Du darfst '{USER_ADDRESS}' genau einmal verwenden, bevorzugt am Satzende. "
-                f"KEINE Tags in eckigen Klammern. KEINE ACTION-Tags."
+                f"KEINE Tags in eckigen Klammern. KEINE ACTION-Tags. "
+                f"{_aussprache_hint}"
             ),
             messages=[{"role": "user", "content": action_result}],
         )
@@ -1605,9 +1617,13 @@ async def get_mails_unread():
 
 @app.get("/api/get_tasks")
 async def get_tasks():
-    """Return reminders — always fetched live from Reminders.app."""
+    """Return reminders and today+tomorrow calendar events."""
     loop = asyncio.get_event_loop()
     fresh = await loop.run_in_executor(None, get_tasks_sync)
+    if HA_URL and HA_TOKEN:
+        cal_lines = await loop.run_in_executor(None, lambda: get_calendar_sync(days=2))
+    else:
+        cal_lines = []
     tasks = []
     for i, task_name in enumerate(fresh):
         tasks.append({
@@ -1615,6 +1631,18 @@ async def get_tasks():
             "title": task_name.strip(),
             "source": "reminders",
             "completed": False
+        })
+    for i, line in enumerate(cal_lines):
+        if " -- " in line:
+            title, label = line.split(" -- ", 1)
+        else:
+            title, label = line, ""
+        tasks.append({
+            "id": f"cal_{i}",
+            "title": title.strip(),
+            "label": label.strip(),
+            "source": "calendar",
+            "completed": None
         })
     return {"tasks": tasks, "total": len(tasks)}
 
