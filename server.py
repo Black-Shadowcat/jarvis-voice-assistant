@@ -2166,6 +2166,7 @@ async def save_config_api(request: Request):
     global ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
     global USER_NAME, USER_ADDRESS, CITY, LAT, LON, LANGUAGE, _L
     global KACHELMANN_KEY, HA_URL, HA_TOKEN, ai, WAKE_GREETING_ENABLED
+    global OBSIDIAN_INBOX, OBSIDIAN_ARCHIVE
 
     data = await request.json()
 
