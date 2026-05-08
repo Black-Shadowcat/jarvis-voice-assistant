@@ -37,11 +37,11 @@ class DailyBrief:
             if data.get("date") != str(date.today()):
                 data = self._fresh_state(preserve_from=data)
                 self._save(data)
-            return data
         except (FileNotFoundError, json.JSONDecodeError):
             data = self._fresh_state()
             self._save(data)
-            return data
+        self._data = data
+        return data
 
     def _save(self, data: dict) -> None:
         os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
