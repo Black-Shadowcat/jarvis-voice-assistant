@@ -672,7 +672,11 @@ input[type="password"] { font-family:monospace; }
 
     <!-- API Keys & Services -->
     <div class="panel">
-        <div class="panel-title">API Keys &amp; Services</div>
+        <div class="panel-title" onclick="togglePanel('apiKeysBody','apiKeysChevron')" style="cursor:pointer;user-select:none;">
+            <span>API Keys &amp; Services</span>
+            <span id="apiKeysChevron" style="font-size:12px;color:#888;">▼</span>
+        </div>
+        <div id="apiKeysBody">
 
         <div class="field-group">
             <label class="label">Anthropic API Key</label>
@@ -700,11 +704,16 @@ input[type="password"] { font-family:monospace; }
                 <button class="field-row-action" onclick="openVoiceModal()" style="white-space:nowrap;">⚙ Verwalten</button>
             </div>
         </div>
+        </div>
     </div>
 
     <!-- User Profile -->
     <div class="panel">
-        <div class="panel-title">Nutzer-Profil</div>
+        <div class="panel-title" onclick="togglePanel('userProfileBody','userProfileChevron')" style="cursor:pointer;user-select:none;">
+            <span>Nutzer-Profil</span>
+            <span id="userProfileChevron" style="font-size:12px;color:#888;">▼</span>
+        </div>
+        <div id="userProfileBody">
 
         <div class="field-grid">
             <div class="field-group">
@@ -736,6 +745,7 @@ input[type="password"] { font-family:monospace; }
                 <input id="lon" type="number" step="0.0001" placeholder="10.00">
             </div>
         </div>
+        </div>
     </div>
 
     <!-- Obsidian -->
@@ -760,10 +770,14 @@ input[type="password"] { font-family:monospace; }
 
     <!-- Home Assistant -->
     <div class="panel">
-        <div class="panel-title">
+        <div class="panel-title" onclick="togglePanel('haBody','haChevron')" style="cursor:pointer;user-select:none;">
             <span>Home Assistant</span>
-            <div class="toggle" id="haToggle" onclick="toggleHA()"></div>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div class="toggle" id="haToggle" onclick="event.stopPropagation();toggleHA()"></div>
+                <span id="haChevron" style="font-size:12px;color:#888;">▼</span>
+            </div>
         </div>
+        <div id="haBody">
 
         <div id="haFields" style="opacity:0.3; pointer-events:none; transition:opacity 0.2s;">
             <div class="field-group">
@@ -778,11 +792,16 @@ input[type="password"] { font-family:monospace; }
                 </div>
             </div>
         </div>
+        </div>
     </div>
 
     <!-- Services & Paths -->
     <div class="panel">
-        <div class="panel-title">Dienste &amp; Pfade</div>
+        <div class="panel-title" onclick="togglePanel('servicesBody','servicesChevron')" style="cursor:pointer;user-select:none;">
+            <span>Dienste &amp; Pfade</span>
+            <span id="servicesChevron" style="font-size:12px;color:#888;">▶</span>
+        </div>
+        <div id="servicesBody" style="display:none;">
 
         <div class="field-group">
             <label class="label">Kachelmann Wetter API Key</label>
@@ -806,10 +825,16 @@ input[type="password"] { font-family:monospace; }
             <label class="label">Spotify Track URI</label>
             <input id="spotifyTrack" type="text" placeholder="spotify:track:…">
         </div>
+        </div>
     </div>
 
     <!-- Behavior -->
     <div class="panel">
+        <div class="panel-title" onclick="togglePanel('behaviorBody','behaviorChevron')" style="cursor:pointer;user-select:none;">
+            <span>Verhalten</span>
+            <span id="behaviorChevron" style="font-size:12px;color:#888;">▼</span>
+        </div>
+        <div id="behaviorBody">
         <div class="toggle-row">
             <div class="toggle-row-label">
                 <div class="text">Begrüßung nach Standby</div>
@@ -817,11 +842,16 @@ input[type="password"] { font-family:monospace; }
             </div>
             <div class="toggle" id="wakeGreetingToggle" onclick="toggleWakeGreeting()"></div>
         </div>
+        </div>
     </div>
 
     <!-- Programs (Dropdown) -->
     <div class="panel">
-        <div class="panel-title">Programme</div>
+        <div class="panel-title" onclick="togglePanel('programsBody','programsChevron')" style="cursor:pointer;user-select:none;">
+            <span>Programme</span>
+            <span id="programsChevron" style="font-size:12px;color:#888;">▶</span>
+        </div>
+        <div id="programsBody" style="display:none;">
         <p style="font-size:0.75rem; color:#888; margin-bottom:12px;">Wähle bis zu 6 Apps, die beim Start geöffnet werden sollen.</p>
         <div class="field-grid" id="programsGrid">
             <div class="field-group">
@@ -848,6 +878,7 @@ input[type="password"] { font-family:monospace; }
                 <label class="label">Programm 6</label>
                 <select id="program-5"></select>
             </div>
+        </div>
         </div>
     </div>
 
@@ -1091,7 +1122,7 @@ input[type="password"] { font-family:monospace; }
 </div>
 
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
-<script defer src="/static/config.js?v=32882d7"></script>
+<script defer src="/static/config.js?v=b58690f"></script>
 
 </body>
 </html>

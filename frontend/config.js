@@ -256,12 +256,16 @@ async function testKey(type) {
     }
 }
 
-function toggleObsidian() {
-    const fields = document.getElementById('obsidianFields');
-    const chevron = document.getElementById('obsidianChevron');
-    const open = fields.style.display === 'none';
-    fields.style.display = open ? 'block' : 'none';
+function togglePanel(bodyId, chevronId) {
+    const body = document.getElementById(bodyId);
+    const chevron = document.getElementById(chevronId);
+    const open = body.style.display === 'none';
+    body.style.display = open ? 'block' : 'none';
     chevron.textContent = open ? '▼' : '▶';
+}
+
+function toggleObsidian() {
+    togglePanel('obsidianFields', 'obsidianChevron');
 }
 
 function toggleHA() {
