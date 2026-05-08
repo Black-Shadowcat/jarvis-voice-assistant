@@ -1320,11 +1320,6 @@ async def handle_structured_action(structured: ActionModel, ws: WebSocket, sessi
         return
 
     # Complex actions — one-sentence LLM summary (same as legacy path)
-    _aussprache_hint = (
-        "Write all numbers, times and dates as words: 'seven o'clock' not '7:00', 'May seventh' not '7. May'. "
-        if LANGUAGE == "en" else
-        "Schreibe Zahlen, Uhrzeiten und Daten als Woerter: 'neunzehn Uhr' nicht '19 Uhr', 'siebter Mai zweitausendundzwanzig' nicht '7. Mai 2026'. "
-    )
     if action_result and "Fehler" not in action_result and "fehlgeschlagen" not in action_result:
         summary_resp = await ai.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -1334,8 +1329,7 @@ async def handle_structured_action(structured: ActionModel, ws: WebSocket, sessi
                 f"Keine Einleitung, kein 'Sehr gerne', kein 'Natuerlich', kein 'Gerne', kein 'Hier'. "
                 f"Keine Wiederholung der Anfrage. Nur die reine Information. "
                 f"Du darfst '{USER_ADDRESS}' genau einmal verwenden, bevorzugt am Satzende. "
-                f"KEINE Tags in eckigen Klammern. KEINE ACTION-Tags. "
-                f"{_aussprache_hint}"
+                f"KEINE Tags in eckigen Klammern. KEINE ACTION-Tags."
             ),
             messages=[{"role": "user", "content": action_result}],
         )
@@ -1544,11 +1538,6 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
 
     # ── Complex actions (SEARCH, NEWS, SCREEN, TASKS_LIST, KALENDER, MAIL_READ, NOTIZ_LIST):
     #    one-sentence LLM summary, no fluff
-    _aussprache_hint = (
-        "Write all numbers, times and dates as words: 'seven o'clock' not '7:00', 'May seventh' not '7. May'. "
-        if LANGUAGE == "en" else
-        "Schreibe Zahlen, Uhrzeiten und Daten als Woerter: 'neunzehn Uhr' nicht '19 Uhr', 'siebter Mai zweitausendundzwanzig' nicht '7. Mai 2026'. "
-    )
     if action_result and "Fehler" not in action_result and "fehlgeschlagen" not in action_result:
         summary_resp = await ai.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -1558,8 +1547,7 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
                 f"Keine Einleitung, kein 'Sehr gerne', kein 'Natuerlich', kein 'Gerne', kein 'Hier'. "
                 f"Keine Wiederholung der Anfrage. Nur die reine Information. "
                 f"Du darfst '{USER_ADDRESS}' genau einmal verwenden, bevorzugt am Satzende. "
-                f"KEINE Tags in eckigen Klammern. KEINE ACTION-Tags. "
-                f"{_aussprache_hint}"
+                f"KEINE Tags in eckigen Klammern. KEINE ACTION-Tags."
             ),
             messages=[{"role": "user", "content": action_result}],
         )
