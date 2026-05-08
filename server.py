@@ -330,6 +330,13 @@ def _display_date(iso: str) -> str:
         return iso
 
 
+def _clean_news_title(title: str, max_len: int = 58) -> str:
+    """Strip 'Source: ' prefix common in RSS titles and truncate gracefully."""
+    if ": " in title[:40]:
+        title = title.split(": ", 1)[1]
+    return title[:max_len].rsplit(" ", 1)[0] if len(title) > max_len else title
+
+
 def _spoken_date(iso: str) -> str:
     """'2026-05-07' → 'siebten Mai zweitausendundzwanzig' — kein Digit für TTS."""
     _ones = ["", "ein", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun",
@@ -1266,8 +1273,23 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
             )
             # Prepare news snippet to speak after LLM brief (deterministic — no LLM creativity)
             if NEWS_INFO:
-                top = [f"{a['source']}: {a['title'][:70]}" for a in NEWS_INFO[:2] if a.get('title')]
-                _morning_news_text = "Aus Ihren Feeds: " + " — ".join(top) + "." if top else ""
+                items = [a for a in NEWS_INFO[:2] if a.get("title")]
+                if len(items) >= 2:
+                    a1, a2 = items[0], items[1]
+                    t1 = _clean_news_title(a1["title"])
+                    t2 = _clean_news_title(a2["title"])
+                    _morning_news_text = (
+                        f"Aus Ihren Feeds: Bei {a1['source']} geht es um {t1}. "
+                        f"Außerdem bei {a2['source']}: {t2}."
+                    )
+                elif len(items) == 1:
+                    a = items[0]
+                    _morning_news_text = (
+                        f"Aus Ihren Feeds: Bei {a['source']} geht es heute um "
+                        f"{_clean_news_title(a['title'])}."
+                    )
+                else:
+                    _morning_news_text = ""
             else:
                 _morning_news_text = ""
             print(f"[jarvis] Activate → Morning Brief via LLM (news: {len(NEWS_INFO)} Artikel)", flush=True)
@@ -1330,9 +1352,12 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
         print(f"  Structured action: {structured.action}", flush=True)
         if user_text.lower().startswith("jarvis activate"):
             await _speak(ws, session_id, structured.response or reply)
-            if _morning_news_text:
+            _lmb = daily_brief._data.get("last_morning_brief")
+            if _morning_news_text and _lmb and not _lmb.get("news_snippet_spoken"):
                 _news_snippet = _morning_news_text
                 _morning_news_text = ""
+                _lmb["news_snippet_spoken"] = True
+                daily_brief.save()
                 await asyncio.sleep(0.6)
                 await _speak(ws, session_id, _news_snippet)
             return
@@ -1345,9 +1370,12 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
     # ── Activate greeting — no actions allowed, speak and done
     if user_text.lower().startswith("jarvis activate"):
         await _speak(ws, session_id, spoken_text)
-        if _morning_news_text:
+        _lmb = daily_brief._data.get("last_morning_brief")
+        if _morning_news_text and _lmb and not _lmb.get("news_snippet_spoken"):
             _news_snippet = _morning_news_text
             _morning_news_text = ""
+            _lmb["news_snippet_spoken"] = True
+            daily_brief.save()
             await asyncio.sleep(0.6)
             await _speak(ws, session_id, _news_snippet)
         return
