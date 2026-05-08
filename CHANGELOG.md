@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), version
 
 ---
 
+## [2.4.0] — 2026-05-08
+
+### Added
+- **Language System** — `language: "de"/"en"` config key switches system prompt language, Web Speech API locale (`de-DE`/`en-US`), and TTS phrasing. Live-reload without restart. `/api/language` endpoint.
+- **TTS Locale Files** — `locales/de.json` + `locales/en.json` extract all hardcoded TTS strings (greetings, Daily Brief templates, reconnect phrases, news snippets, light responses). `DailyBrief` reads locale via `set_locale()`.
+- **UI i18n** — `frontend/i18n/de.json` + `en.json` (28 keys each). `data-i18n` / `data-i18n-placeholder` attributes on all panel titles, status text, placeholders, popup buttons, and dynamic JS strings. Language loaded from `/api/language` on DOMContentLoaded.
+- **In-App Update Badge** — Dashboard checks GitHub Releases API (`/repos/.../releases/latest`) on startup. Badge appears if a newer version exists (blue for patch/minor, gold for major). 24h server-side cache. Dismissable per session via sessionStorage.
+
+### Fixed
+- `UnboundLocalError: 'os'` in `NOTIZ_ERLEDIGT` action — two misplaced `import os` statements inside `execute_action()` made Python treat `os` as a local variable for the entire function scope. Removed; module-level import is sufficient.
+
+---
+
 ## [2.3.1] — 2026-05-08
 
 ### Added

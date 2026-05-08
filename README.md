@@ -1,4 +1,4 @@
-# J.A.R.V.I.S. — Personal AI Voice Assistant (macOS V2.1)
+# J.A.R.V.I.S. — Personal AI Voice Assistant (macOS v2.4)
 
 > **This project is based on the original idea and Windows implementation by [Julian Ivanov](https://github.com/Julian-Ivanov/jarvis-voice-assistant).**
 > What started as a macOS port has grown into a substantially expanded version — with Home Assistant integration, Apple Reminders, Obsidian, a Config UI, a Dashboard, and a new action system. The core concept, personality, and architecture remain Julian's. No support is provided. This fork is maintained for personal use only.
@@ -19,7 +19,7 @@ Built for macOS (Apple Silicon M4) with [Claude Code](https://claude.ai/code). K
 | No calendar | iCal via HA CalDAV (today + tomorrow) |
 | No notes | Obsidian Inbox (write/read/delete) |
 | No config UI | Config UI at `/config` (no text editor needed) |
-| No dashboard | Dashboard at `/dashboard` (mail, tasks, lights, apps) |
+| No dashboard | Dashboard at `/` (mail, tasks, news, app launcher) |
 | Window snapping | Chrome App Mode fullscreen (`--start-fullscreen`) |
 
 ---
@@ -40,7 +40,8 @@ Built for macOS (Apple Silicon M4) with [Claude Code](https://claude.ai/code). K
 
 ## Features
 
-- **Voice Conversation** — Speak freely in German. Jarvis listens, thinks, responds with voice. Echo protection prevents feedback loops.
+- **Voice Conversation** — Speak freely in German or English. Jarvis listens, thinks, responds with voice. Echo protection prevents feedback loops.
+- **Language Switching** — `language: "de"/"en"` in config switches system prompt, speech recognition locale, TTS phrasing, and all UI labels. No restart required.
 - **HUD Click Mute** — Click the animated SVG ring to mute/unmute the microphone. Ring turns red when muted.
 - **Text Input Toggle** — Pencil icon in the panel header reveals a text input field for typed commands.
 - **Sarcastic British Butler** — Dry, witty personality. Addresses you by your configured title (Sir, Ms. Smith, Chef, …).
@@ -52,12 +53,14 @@ Built for macOS (Apple Silicon M4) with [Claude Code](https://claude.ai/code). K
 - **Obsidian Inbox** — Write notes, read notes, mark notes as done — all by voice.
 - **Browser Automation** — Playwright controls a real browser: search, open URLs, read page content.
 - **Screen Vision** — Screenshot + Claude Vision: "What's on my screen?"
-- **Wake-from-Sleep** — Jarvis wakes automatically after system sleep (120-second cooldown).
+- **RSS News** — Fetch and read RSS articles by category. Manage feeds via Config UI modal.
+- **Daily Brief Memory System** — Event-driven intelligence: morning brief (weather, mails, tasks), pause brief after >30 min, absence brief after >90 min, evening brief from 17:00. Tracks mail IDs so Jarvis stays silent when nothing changed.
+- **Wake-from-Sleep** — Waits for screen unlock, then delivers the contextually appropriate brief.
+- **In-App Update Badge** — Dashboard shows a badge when a new GitHub release is available.
 - **Mic-Mute Menubar** — macOS menubar button to mute/unmute the microphone system-wide.
-- **Config UI** — All settings (API keys, voice, city, etc.) via browser at `/config`. No text editor.
-- **Dashboard** — At `/dashboard`: mails, tasks, Obsidian notes, HA lights, app launcher.
+- **Config UI** — All settings (API keys, voice, language, city, etc.) via browser at `/config`. No text editor.
+- **Dashboard** — At `/`: mails, tasks, Obsidian notes, RSS news, app launcher.
 - **launchd KeepAlive** — Server auto-restarts on crash. Session launches on login.
-- **Dark/Light Mode** — Follows macOS system appearance automatically.
 
 ---
 
@@ -80,7 +83,7 @@ You (speak) → Chrome Browser (Web Speech API de-DE) → FastAPI Server (localh
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| Speech Input | Web Speech API (Chrome, de-DE) | Voice to text |
+| Speech Input | Web Speech API (Chrome, de-DE / en-US) | Voice to text |
 | Server | FastAPI (Python 3.11) | Local orchestration |
 | Brain | Claude Haiku (Anthropic) | Thinking, deciding, responding |
 | Voice | ElevenLabs TTS (eleven_turbo_v2_5) | Natural German speech |
@@ -172,13 +175,22 @@ jarvis-voice-assistant/
 ├── config.json            # Personal config (gitignored)
 ├── config.example.json    # Template for new users
 ├── requirements.txt       # Python dependencies
+├── locales/
+│   ├── de.json            # German TTS strings (greetings, briefs, etc.)
+│   └── en.json            # English equivalents
+├── systems/
+│   └── daily_brief.py     # Daily Brief Memory System (DailyBrief class)
+├── data/
+│   ├── daily_brief_memory.json   # Daily state (gitignored, resets at midnight)
+│   └── daily_brief_archive/      # Past days archive (gitignored)
 ├── frontend/
-│   ├── index.html         # Jarvis HUD (Chrome App Mode, port 8340)
-│   ├── dashboard.html     # Dashboard UI (/dashboard)
+│   ├── index.html         # Jarvis Dashboard + HUD (Chrome App Mode, port 8340)
 │   ├── config.html        # Config UI (/config)
 │   ├── config.js          # Config UI logic
-│   ├── main.js            # Speech recognition + WebSocket + audio
-│   └── style.css          # Dark/light theme, panel layouts
+│   ├── handbuch.html      # User manual (/handbuch)
+│   └── i18n/
+│       ├── de.json        # German UI labels
+│       └── en.json        # English UI labels
 └── scripts/
     ├── launch-session.sh  # Starts server + Chrome + mic-mute button
     ├── mic-mute-menubar.py # macOS menubar mute toggle
@@ -235,7 +247,7 @@ Three agents in `~/Library/LaunchAgents/`:
 ## Credits
 
 Original idea and Windows implementation by [Julian Ivanov](https://github.com/Julian-Ivanov) — built with [Claude Code](https://claude.ai/code).
-macOS V2.1 — substantially expanded by Matthias Schreiber, also built with [Claude Code](https://claude.ai/code).
+macOS v2.4 — substantially expanded by Matthias Schreiber, also built with [Claude Code](https://claude.ai/code).
 
 Inspired by Iron Man's J.A.R.V.I.S. — *"At your service, Sir."*
 

@@ -23,7 +23,7 @@ Frage nach Name, Taetigkeit und bevorzugter Anrede — diese Infos gehoeren in d
 ├── CLAUDE.md                    # Diese Datei
 ├── SETUP_macOS.md               # Setup-Anleitung
 ├── README.md / README_de.md     # Projektdoku (EN/DE)
-├── version.json                 # Aktuelle Version (z.B. 2.1.3)
+├── version.json                 # Aktuelle Version (z.B. 2.4.0)
 ├── config.json                  # Persoenliche Config (gitignored)
 ├── config.example.json          # Template (alle Keys mit Defaults)
 ├── voice.json                   # ElevenLabs Voice-Config (gitignored)
@@ -32,6 +32,9 @@ Frage nach Name, Taetigkeit und bevorzugter Anrede — diese Infos gehoeren in d
 ├── server.py                    # FastAPI Backend — Hauptdatei
 ├── browser_tools.py             # Playwright Browser-Steuerung
 ├── screen_capture.py            # Screenshot + Claude Vision (SCREEN-Action)
+├── locales/
+│   ├── de.json                  # Deutsche TTS-Strings (Begrüßungen, Briefs, Reconnect, News, Licht)
+│   └── en.json                  # Englische Entsprechungen
 ├── systems/
 │   ├── __init__.py              # Leer
 │   └── daily_brief.py           # Daily Brief Memory System (DailyBrief-Klasse)
@@ -42,7 +45,10 @@ Frage nach Name, Taetigkeit und bevorzugter Anrede — diese Infos gehoeren in d
 │   ├── index.html               # Jarvis Dashboard — Haupt-UI (/) — alles JS/CSS inline
 │   ├── config.html              # Config UI (/config)
 │   ├── config.js                # Config UI Logik
-│   └── handbuch.html            # Benutzerhandbuch (/handbuch)
+│   ├── handbuch.html            # Benutzerhandbuch (/handbuch)
+│   └── i18n/
+│       ├── de.json              # Deutsche UI-Labels (28 Keys, via /static/i18n/de.json)
+│       └── en.json              # Englische UI-Labels
 ├── docs/
 │   ├── JARVIS_Handbuch.pdf      # PDF-Handbuch
 │   └── Jarvis-Start.mp4         # Demo-Video
@@ -62,7 +68,7 @@ Frage nach Name, Taetigkeit und bevorzugter Anrede — diese Infos gehoeren in d
 | Backend | FastAPI, Python 3.11, Port **8340** |
 | KI-Modell | `claude-haiku-4-5-20251001` (Anthropic) |
 | TTS | ElevenLabs `eleven_turbo_v2_5`, chunked parallel |
-| Spracherkennung | Web Speech API (Chrome, `de-DE`) |
+| Spracherkennung | Web Speech API (Chrome, `de-DE` / `en-US` — via `language` Config-Key) |
 | Browser | Playwright Chromium (headless) |
 | Autostart | macOS launchd (keepalive) |
 
@@ -77,6 +83,9 @@ Frage nach Name, Taetigkeit und bevorzugter Anrede — diese Infos gehoeren in d
 - `POST /api/daily_brief/manual` → Manueller Trigger: `{ "trigger": "morning|evening|absence|reset" }`
 - `GET /api/daily_brief/memory` → Debug: kompletter Tagesgedaechtnisstand
 - `POST /api/wake` → Von wake-monitor.py — prueft Brief-Trigger, spricht direkt via _speak()
+- `GET /api/language` → `{ "language": "de"|"en", "speech_lang": "de-DE"|"en-US" }`
+- `GET /api/update_check` → GitHub-Release-Vergleich, 24h-Cache
+- `/static/*` → StaticFiles aus `frontend/` — inkl. `/static/i18n/{de|en}.json`
 
 ---
 
@@ -104,6 +113,8 @@ Frage nach Name, Taetigkeit und bevorzugter Anrede — diese Infos gehoeren in d
 - **Daily Brief Routing**: "Jarvis activate" geht NICHT mehr an den LLM fuer Morgen-Briefings — direkt durch `DailyBrief.generate_morning_brief()` → `_speak()`
 - **Action-System**: Structured Output (ActionModel via Pydantic) → `_structured_to_legacy_action()` → `execute_action()`. Nicht ohne Phase-7-Plan anfassen.
 - **Daily Brief Memory**: `data/daily_brief_memory.json` — gitignored, wird bei Datumswechsel automatisch archiviert und neu erstellt. Schwellenwerte (30/90 min) stehen in der JSON selbst.
+- **Language-System**: `LANGUAGE = config.get("language", "de")` → laedt `locales/{lang}.json` via `_load_locale()` → wird in `DailyBrief.set_locale()` injiziert. UI-Labels kommen aus `frontend/i18n/{lang}.json` via `/static/i18n/`. Live-Reload bei Config-Save.
+- **Update-Badge**: `_check_for_update()` per `httpx` gegen GitHub API, SemVer-Vergleich als int-Listen, 24h-Cache in `_update_cache`. Kein Auto-Update.
 
 ---
 

@@ -1,4 +1,4 @@
-# J.A.R.V.I.S. — Persönlicher KI-Sprachassistent (macOS V2.1)
+# J.A.R.V.I.S. — Persönlicher KI-Sprachassistent (macOS v2.4)
 
 > **Dieses Projekt basiert auf der ursprünglichen Idee und Windows-Implementierung von [Julian Ivanov](https://github.com/Julian-Ivanov/jarvis-voice-assistant).**
 > Was als macOS-Port begann, ist zu einer erheblich erweiterten Version gewachsen — mit Home Assistant Integration, Apple Erinnerungen, Obsidian, einer Config-Oberfläche, einem Dashboard und einem neuen Action-System. Grundkonzept, Persönlichkeit und Architektur stammen von Julian. Kein Support. Dieses Projekt wird ausschließlich für den persönlichen Gebrauch gepflegt.
@@ -19,7 +19,7 @@ Entwickelt für macOS (Apple Silicon M4) mit [Claude Code](https://claude.ai/cod
 | Kein Kalender | iCal via HA CalDAV (heute + morgen) |
 | Keine Notizen | Obsidian Inbox (schreiben/lesen/löschen) |
 | Keine Config-Oberfläche | Config UI unter `/config` (kein Texteditor nötig) |
-| Kein Dashboard | Dashboard unter `/dashboard` (Mails, Aufgaben, Lichter, Apps) |
+| Kein Dashboard | Dashboard unter `/` (Mails, Aufgaben, News, App-Starter) |
 | Fenster-Snapping | Chrome App Mode Vollbild (`--start-fullscreen`) |
 
 ---
@@ -36,7 +36,8 @@ Entwickelt für macOS (Apple Silicon M4) mit [Claude Code](https://claude.ai/cod
 
 ## Features
 
-- **Sprachgespräch** — Spreche frei auf Deutsch. Jarvis hört zu, denkt nach, antwortet per Stimme. Echo-Schutz verhindert Rückkopplungsschleifen.
+- **Sprachgespräch** — Spreche frei auf Deutsch oder Englisch. Jarvis hört zu, denkt nach, antwortet per Stimme. Echo-Schutz verhindert Rückkopplungsschleifen.
+- **Sprachumschaltung** — `language: "de"/"en"` in der Config schaltet System-Prompt, Spracherkennung, TTS-Phrasen und alle UI-Labels um. Kein Neustart erforderlich.
 - **HUD-Klick-Stummschaltung** — Klick auf den animierten SVG-Ring schaltet das Mikrofon stumm/aktiv. Ring wird rot bei Stummschaltung.
 - **Texteingabe-Toggle** — Stift-Icon im Panel-Header blendet ein Texteingabefeld für getippte Befehle ein.
 - **Britischer Butler** — Trockene, witzige Persönlichkeit. Spricht dich mit deiner konfigurierten Anrede an (Sir, Ms. Schmidt, Chef, …).
@@ -48,13 +49,14 @@ Entwickelt für macOS (Apple Silicon M4) mit [Claude Code](https://claude.ai/cod
 - **Obsidian Inbox** — Notizen schreiben, lesen, erledigen — alles per Stimme.
 - **Browser-Automatisierung** — Playwright steuert einen echten Browser: suchen, URLs öffnen, Seiteninhalte lesen.
 - **Bildschirm-Vision** — Screenshot + Claude Vision: "Was ist auf meinem Bildschirm?"
-- **Daily Brief Memory System** — Ereignisgesteuerte Intelligenz: Morgen-Briefing (Wetter, Mails, Aufgaben), Pause-Brief nach >30 min Abwesenheit, Abwesenheits-Brief nach >90 min, Abend-Briefing ab 17:00. Tagesgedächtnis speichert Mail-IDs — Jarvis weiß was er bereits erwähnt hat und schweigt wenn sich nichts geändert hat.
-- **Wake-from-Sleep** — Jarvis wartet nach dem Aufwachen bis der Screen entsperrt ist, spricht dann automatisch den passenden Brief.
+- **RSS-Neuigkeiten** — RSS-Artikel nach Kategorie abrufen und vorlesen. Feeds über Config-UI-Modal verwalten.
+- **Daily Brief Memory System** — Ereignisgesteuerte Intelligenz: Morgen-Briefing (Wetter, Mails, Aufgaben), Pause-Brief nach >30 min Abwesenheit, Abwesenheits-Brief nach >90 min, Abend-Briefing ab 17:00. Tagesgedächtnis speichert Mail-IDs — Jarvis schweigt wenn sich nichts geändert hat.
+- **Wake-from-Sleep** — Wartet auf den Screen-Unlock, spricht dann automatisch den passenden Brief.
+- **Update-Badge** — Dashboard zeigt ein Badge wenn eine neue GitHub-Version verfügbar ist.
 - **Mikrofon-Stummschaltung in der Menüleiste** — macOS-Menüleisten-Button zum systemweiten Stummschalten.
-- **Config UI** — Alle Einstellungen (API-Keys, Stimme, Stadt etc.) im Browser unter `/config`. Kein Texteditor.
-- **Dashboard** — Unter `/`: Mails, Aufgaben, Obsidian-Notizen, HA-Lichter, App-Starter.
+- **Config UI** — Alle Einstellungen (API-Keys, Stimme, Sprache, Stadt etc.) im Browser unter `/config`. Kein Texteditor.
+- **Dashboard** — Unter `/`: Mails, Aufgaben, Obsidian-Notizen, RSS-News, App-Starter.
 - **launchd KeepAlive** — Server startet bei Absturz automatisch neu. Session startet beim Login.
-- **Dark/Light Mode** — Folgt automatisch der macOS-Systemdarstellung.
 
 ---
 
@@ -77,7 +79,7 @@ Du (sprechen) → Chrome Browser (Web Speech API de-DE) → FastAPI Server (loca
 
 | Komponente | Technologie | Zweck |
 |------------|-------------|-------|
-| Spracheingabe | Web Speech API (Chrome, de-DE) | Stimme zu Text |
+| Spracheingabe | Web Speech API (Chrome, de-DE / en-US) | Stimme zu Text |
 | Server | FastAPI (Python 3.11) | Lokale Orchestrierung |
 | Gehirn | Claude Haiku (Anthropic) | Denken, entscheiden, antworten |
 | Stimme | ElevenLabs TTS (eleven_turbo_v2_5) | Natürliche deutsche Sprachausgabe |
@@ -169,15 +171,22 @@ jarvis-voice-assistant/
 ├── config.json            # Persönliche Config (gitignored)
 ├── config.example.json    # Vorlage für neue Nutzer
 ├── requirements.txt       # Python-Abhängigkeiten
+├── locales/
+│   ├── de.json            # Deutsche TTS-Strings (Begrüßungen, Briefs etc.)
+│   └── en.json            # Englische Entsprechungen
 ├── systems/
-│   └── daily_brief.py     # Daily Brief Memory System
+│   └── daily_brief.py     # Daily Brief Memory System (DailyBrief-Klasse)
 ├── data/
 │   ├── daily_brief_memory.json   # Tagesgedächtnis (gitignored)
 │   └── daily_brief_archive/      # Archiv vergangener Tage (gitignored)
 ├── frontend/
 │   ├── index.html         # Jarvis Dashboard + HUD (Chrome App Mode, Port 8340)
 │   ├── config.html        # Config UI (/config)
-│   └── config.js          # Config UI Logik
+│   ├── config.js          # Config UI Logik
+│   ├── handbuch.html      # Benutzerhandbuch (/handbuch)
+│   └── i18n/
+│       ├── de.json        # Deutsche UI-Labels
+│       └── en.json        # Englische UI-Labels
 └── scripts/
     ├── launch-session.sh  # Startet Server + Chrome + Mic-Mute Button
     ├── mic-mute-menubar.py # macOS Menüleisten-Stummschaltung
@@ -234,7 +243,7 @@ Drei Agents unter `~/Library/LaunchAgents/`:
 ## Danksagung
 
 Ursprüngliche Idee und Windows-Implementierung von [Julian Ivanov](https://github.com/Julian-Ivanov) — entwickelt mit [Claude Code](https://claude.ai/code).
-macOS V2.1 — erheblich erweitert von Matthias Schreiber, ebenfalls mit [Claude Code](https://claude.ai/code).
+macOS v2.4 — erheblich erweitert von Matthias Schreiber, ebenfalls mit [Claude Code](https://claude.ai/code).
 
 Inspiriert von Iron Mans J.A.R.V.I.S. — *"Zu Ihren Diensten, Sir."*
 
