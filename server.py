@@ -802,13 +802,15 @@ async def execute_action(action: dict) -> str:
         await news.save_to_archive(new_articles)
         if new_articles:
             NEWS_INFO = (new_articles + NEWS_INFO)[:10]
-        if not new_articles:
-            return f"Keine neuen Artikel seit dem letzten Abruf, {USER_ADDRESS}."
-        top3 = new_articles[:3]
+        unread = await news.get_unread_articles()
+        if not unread:
+            return f"Keine ungelesenen Artikel, {USER_ADDRESS}."
+        top3 = unread[:3]
         items = " — ".join([f"{a['source']}: {a['title'][:60]}" for a in top3])
-        total = len(new_articles)
+        total = len(unread)
         suffix = f" Und {total - 3} weitere." if total > 3 else ""
-        return f"{total} neue Artikel: {items}.{suffix}"
+        new_note = f" ({len(new_articles)} neu)" if new_articles else ""
+        return f"{total} ungelesene Artikel{new_note}: {items}.{suffix}"
 
     elif t == "NEWS_SEARCH":
         global _last_search_url, _last_search_published
