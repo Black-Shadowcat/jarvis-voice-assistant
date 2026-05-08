@@ -436,57 +436,6 @@ function showToast(msg, type = 'info') {
     setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
-// ── Brain Reset ───────────────────────────────────────────────────────────
-
-function openBrainResetModal() {
-    document.getElementById('brainConfirmCheck').checked = false;
-    document.getElementById('brainConfirmCheck').disabled = false;
-    const btn = document.getElementById('brainDeleteBtn');
-    btn.disabled = true;
-    btn.textContent = '🗑 JA — Gehirn löschen';
-    btn.style.background = '';
-    btn.style.color = '';
-    document.getElementById('brainResetModal').classList.add('show');
-}
-
-function closeBrainResetModal() {
-    document.getElementById('brainResetModal').classList.remove('show');
-}
-
-function brainCheckToggle() {
-    document.getElementById('brainDeleteBtn').disabled =
-        !document.getElementById('brainConfirmCheck').checked;
-}
-
-async function executeBrainReset() {
-    const btn = document.getElementById('brainDeleteBtn');
-    const check = document.getElementById('brainConfirmCheck');
-    btn.textContent = 'Lösche Erinnerungen… bitte warten';
-    btn.disabled = true;
-    check.disabled = true;
-
-    try {
-        const resp = await fetch('/api/maintenance/reset_all', {method: 'POST'});
-        if (!resp.ok) throw new Error('Server error ' + resp.status);
-
-        btn.textContent = '✅ Gehirn gelöscht. Seite lädt neu in 3 Sekunden…';
-        btn.style.background = 'rgba(76,191,126,0.15)';
-        btn.style.color = '#4cbf7e';
-        btn.style.borderColor = 'rgba(76,191,126,0.4)';
-
-        setTimeout(() => {
-            closeBrainResetModal();
-            location.reload();
-        }, 3000);
-    } catch(e) {
-        btn.textContent = '✗ Fehler — bitte nochmal versuchen';
-        btn.style.background = '';
-        btn.style.color = '#e05252';
-        btn.disabled = false;
-        check.disabled = false;
-    }
-}
-
 // ── Maintenance ───────────────────────────────────────────────────────────
 
 async function openMaintenanceModal() {
@@ -528,10 +477,25 @@ function mAskConfirm(type) {
     const ids = {news: 'mBtnNews', brief: 'mBtnBrief', all: 'mBtnAll'};
     const el = document.getElementById(ids[type]);
     el.innerHTML = `
-        <span style="font-size:0.8rem;color:#e05252;margin-right:8px;">Sicher?</span>
-        <button class="btn-icon btn-del" onclick="mDoReset('${type}')">Ja</button>
-        <button class="btn-icon btn-edit" onclick="mRestoreButtons()" style="margin-left:4px;">Nein</button>
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#aaa;cursor:pointer;">
+                <input type="checkbox" id="mCheck_${type}" onchange="mCheckToggle('${type}')" style="accent-color:#e05252;width:14px;height:14px;flex-shrink:0;">
+                Ja, unwiederbringlich löschen
+            </label>
+            <div style="display:flex;gap:6px;">
+                <button class="btn-icon btn-del" id="mConfirmBtn_${type}" onclick="mDoReset('${type}')" disabled style="opacity:0.35;cursor:not-allowed;">Löschen</button>
+                <button class="btn-icon btn-edit" onclick="mRestoreButtons()">Abbrechen</button>
+            </div>
+        </div>
     `;
+}
+
+function mCheckToggle(type) {
+    const checked = document.getElementById(`mCheck_${type}`).checked;
+    const btn = document.getElementById(`mConfirmBtn_${type}`);
+    btn.disabled = !checked;
+    btn.style.opacity = checked ? '1' : '0.35';
+    btn.style.cursor = checked ? 'pointer' : 'not-allowed';
 }
 
 async function mDoReset(type) {
