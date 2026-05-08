@@ -364,12 +364,25 @@ _DE_ORDINALS = [
     "fünfundzwanzigsten", "sechsundzwanzigsten", "siebenundzwanzigsten", "achtundzwanzigsten",
     "neunundzwanzigsten", "dreißigsten", "einunddreißigsten",
 ]
+_EN_WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+_EN_MONTHS   = ["", "January", "February", "March", "April", "May", "June",
+                 "July", "August", "September", "October", "November", "December"]
+_EN_ORDINALS = [
+    "", "first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+    "eighth", "ninth", "tenth", "eleventh", "twelfth", "thirteenth", "fourteenth",
+    "fifteenth", "sixteenth", "seventeenth", "eighteenth", "nineteenth", "twentieth",
+    "twenty-first", "twenty-second", "twenty-third", "twenty-fourth", "twenty-fifth",
+    "twenty-sixth", "twenty-seventh", "twenty-eighth", "twenty-ninth", "thirtieth",
+    "thirty-first",
+]
 
 
 def _display_date(iso: str) -> str:
-    """'2026-05-07' → '07. Mai 2026' — lesbare Form für das Frontend."""
+    """'2026-05-07' → '07. Mai 2026' (de) / 'May 7, 2026' (en) — für Frontend."""
     try:
         d = datetime.strptime(iso[:10], "%Y-%m-%d")
+        if LANGUAGE == "en":
+            return f"{_EN_MONTHS[d.month]} {d.day}, {d.year}"
         return f"{d.day:02d}. {_DE_MONTHS[d.month]} {d.year}"
     except Exception:
         return iso
@@ -383,23 +396,39 @@ def _clean_news_title(title: str, max_len: int = 58) -> str:
 
 
 def _spoken_date(iso: str) -> str:
-    """'2026-05-07' → 'siebten Mai zweitausendundzwanzig' — kein Digit für TTS."""
-    _ones = ["", "ein", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun",
-             "zehn", "elf", "zwölf", "dreizehn", "vierzehn", "fünfzehn", "sechzehn",
-             "siebzehn", "achtzehn", "neunzehn"]
-    _zehner = ["", "", "zwanzig", "dreißig", "vierzig", "fünfzig",
-               "sechzig", "siebzig", "achtzig", "neunzig"]
-    def _year(y):
-        if not (2000 <= y <= 2099):
-            return str(y)
+    """'2026-05-07' → 'siebten Mai zweitausendundzwanzig' (de) / 'seventh of May two thousand and twenty-six' (en)."""
+    _de_ones  = ["", "ein", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun",
+                 "zehn", "elf", "zwölf", "dreizehn", "vierzehn", "fünfzehn", "sechzehn",
+                 "siebzehn", "achtzehn", "neunzehn"]
+    _de_tens  = ["", "", "zwanzig", "dreißig", "vierzig", "fünfzig",
+                 "sechzig", "siebzig", "achtzig", "neunzig"]
+    _en_ones  = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+                 "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+                 "seventeen", "eighteen", "nineteen"]
+    _en_tens  = ["", "", "twenty", "thirty", "forty", "fifty",
+                 "sixty", "seventy", "eighty", "ninety"]
+
+    def _de_year(y):
+        if not (2000 <= y <= 2099): return str(y)
         r = y - 2000
-        if r == 0:   return "zweitausend"
-        if r <= 19:  return f"zweitausend{_ones[r]}"
+        if r == 0:  return "zweitausend"
+        if r <= 19: return f"zweitausend{_de_ones[r]}"
         o, t = r % 10, r // 10
-        return f"zweitausend{_ones[o]}und{_zehner[t]}" if o else f"zweitausend{_zehner[t]}"
+        return f"zweitausend{_de_ones[o]}und{_de_tens[t]}" if o else f"zweitausend{_de_tens[t]}"
+
+    def _en_year(y):
+        if not (2000 <= y <= 2099): return str(y)
+        r = y - 2000
+        if r == 0:  return "two thousand"
+        if r <= 19: return f"two thousand and {_en_ones[r]}"
+        o, t = r % 10, r // 10
+        return f"two thousand and {_en_tens[t]}-{_en_ones[o]}" if o else f"two thousand and {_en_tens[t]}"
+
     try:
         d = datetime.strptime(iso[:10], "%Y-%m-%d")
-        return f"{_DE_ORDINALS[d.day]} {_DE_MONTHS[d.month]} {_year(d.year)}"
+        if LANGUAGE == "en":
+            return f"{_EN_ORDINALS[d.day]} of {_EN_MONTHS[d.month]} {_en_year(d.year)}"
+        return f"{_DE_ORDINALS[d.day]} {_DE_MONTHS[d.month]} {_de_year(d.year)}"
     except Exception:
         return iso
 
@@ -408,21 +437,30 @@ def _label_from_dt(dt) -> str:
     """Convert a datetime to a human-readable relative label for Claude."""
     from datetime import date
     delta = (dt.date() - date.today()).days
-    weekday = _DE_WEEKDAYS[dt.weekday()]
-    if dt.hour == 0 and dt.minute == 0:
-        time_str = ""
-    elif dt.minute == 0:
-        time_str = f" {dt.hour} Uhr"
+    if LANGUAGE == "en":
+        weekday = _EN_WEEKDAYS[dt.weekday()]
+        if dt.hour == 0 and dt.minute == 0:
+            time_str = ""
+        elif dt.minute == 0:
+            time_str = f" at {dt.hour}:00"
+        else:
+            time_str = f" at {dt.hour}:{dt.minute:02d}"
+        if delta == 0:   return f"today{time_str} ({weekday})"
+        elif delta == 1: return f"tomorrow{time_str} ({weekday})"
+        elif delta == 2: return f"the day after tomorrow{time_str} ({weekday})"
+        else:            return f"{weekday}, {dt.strftime('%d.%m.')}{time_str} (in {delta} days)"
     else:
-        time_str = f" {dt.hour} Uhr {dt.minute}"
-    if delta == 0:
-        return f"heute{time_str} ({weekday})"
-    elif delta == 1:
-        return f"morgen{time_str} ({weekday})"
-    elif delta == 2:
-        return f"uebermorgen{time_str} ({weekday})"
-    else:
-        return f"{weekday}, {dt.strftime('%d.%m.')}{time_str} (in {delta} Tagen)"
+        weekday = _DE_WEEKDAYS[dt.weekday()]
+        if dt.hour == 0 and dt.minute == 0:
+            time_str = ""
+        elif dt.minute == 0:
+            time_str = f" {dt.hour} Uhr"
+        else:
+            time_str = f" {dt.hour} Uhr {dt.minute}"
+        if delta == 0:   return f"heute{time_str} ({weekday})"
+        elif delta == 1: return f"morgen{time_str} ({weekday})"
+        elif delta == 2: return f"uebermorgen{time_str} ({weekday})"
+        else:            return f"{weekday}, {dt.strftime('%d.%m.')}{time_str} (in {delta} Tagen)"
 
 
 def get_calendar_sync(days: int = 7) -> list[str]:
@@ -597,18 +635,28 @@ def build_system_prompt():
             f'You speak exclusively English. '
             f'{USER_NAME} wishes to be addressed as "{USER_ADDRESS}".'
         )
+        _aussprache_block = (
+            'PRONUNCIATION: Always write temperatures as "X degrees" — never as "°C". '
+            'Write times as "8 o\'clock" or "8 fifteen" — never as "20:00". '
+            'Write dates as "May 7, 2026" — never as "2026-05-07" or ISO formats.'
+        )
     else:
         _lang_block = (
             f'Du sprichst ausschliesslich Deutsch. '
             f'{USER_NAME} moechte mit "{USER_ADDRESS}" angesprochen und gesiezt werden. '
             f'Nutze "Sie" als Pronomen — FALSCH: "{USER_ADDRESS} planen", RICHTIG: "Sie planen, {USER_ADDRESS}".'
         )
+        _aussprache_block = (
+            'AUSSPRACHE: Schreibe Temperaturen immer als "X Grad" oder "X Komma Y Grad" — niemals als "°C". '
+            'Schreibe Uhrzeiten immer als "X Uhr" (z.B. "20 Uhr") oder "X Uhr Y" (z.B. "20 Uhr 5") — niemals als "20:00 Uhr" oder "20:05 Uhr". '
+            'Schreibe Daten IMMER als "7. Mai 2026" — niemals als "2026-05-07" oder andere ISO-Formate.'
+        )
 
     return f"""Du bist Jarvis, der KI-Assistent von Tony Stark aus Iron Man. Du dienst {USER_NAME}, wohnhaft in {CITY}. {_lang_block} Dein Ton ist trocken, sarkastisch und britisch-hoeflich - wie ein Butler der alles gesehen hat und trotzdem loyal bleibt. Du machst subtile, trockene Bemerkungen, bist aber niemals respektlos. Wenn {USER_ADDRESS} eine offensichtliche Frage stellt, darfst du mit elegantem Sarkasmus antworten. Du bist hochintelligent, effizient und immer einen Schritt voraus. Halte deine Antworten kurz - maximal 3 Saetze. Du kommentierst fragwuerdige Entscheidungen hoeflich aber spitz.
 
 WICHTIG: Schreibe NIEMALS Regieanweisungen, Emotionen oder Tags in eckigen Klammern wie [sarcastic] [formal] [amused] [dry] oder aehnliches. Dein Sarkasmus muss REIN durch die Wortwahl kommen. Alles was du schreibst wird laut vorgelesen.
 
-AUSSPRACHE: Schreibe Temperaturen immer als "X Grad" oder "X Komma Y Grad" — niemals als "°C". Schreibe Uhrzeiten immer als "X Uhr" (z.B. "20 Uhr") oder "X Uhr Y" (z.B. "20 Uhr 5") — niemals als "20:00 Uhr" oder "20:05 Uhr". Schreibe Daten IMMER als "7. Mai 2026" — niemals als "2026-05-07" oder andere ISO-Formate.
+{_aussprache_block}
 
 Du hast die volle Kontrolle ueber den Browser von {USER_NAME}. Du kannst im Internet suchen, Webseiten oeffnen und den Bildschirm sehen. Wenn {USER_ADDRESS} dich bittet etwas nachzuschauen, zu recherchieren, zu googeln, eine Seite zu oeffnen, oder irgendetwas im Internet zu tun — nutze IMMER eine Aktion. Frag nicht ob du es tun sollst, tu es einfach.
 
