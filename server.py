@@ -11,6 +11,7 @@ import json
 import os
 import random
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -993,28 +994,29 @@ end tell'''
         if not OBSIDIAN_INBOX:
             return "Obsidian Inbox Pfad nicht konfiguriert."
         try:
-            import os
+            erledigt_dir = os.path.join(OBSIDIAN_INBOX, "Erledigt")
+            os.makedirs(erledigt_dir, exist_ok=True)
             keyword = p.strip().lower()
             files = [f for f in os.listdir(OBSIDIAN_INBOX) if f.endswith(".md")]
             if not files:
                 return "Die Obsidian Inbox ist bereits leer."
-            deleted = []
+            moved = []
             for fname in files:
                 fpath = os.path.join(OBSIDIAN_INBOX, fname)
                 if keyword == "alle":
-                    os.remove(fpath)
-                    deleted.append(fname)
+                    shutil.move(fpath, os.path.join(erledigt_dir, fname))
+                    moved.append(fname)
                 else:
                     with open(fpath, "r", encoding="utf-8") as f:
                         content = f.read()
                     if keyword in content.lower():
-                        os.remove(fpath)
-                        deleted.append(fname)
-            if not deleted:
+                        shutil.move(fpath, os.path.join(erledigt_dir, fname))
+                        moved.append(fname)
+            if not moved:
                 return f"Keine Notiz mit '{p.strip()}' gefunden."
-            return f"{len(deleted)} Notiz{'en' if len(deleted) != 1 else ''} als erledigt markiert."
+            return f"{len(moved)} Notiz{'en' if len(moved) != 1 else ''} als erledigt markiert."
         except Exception as e:
-            return f"Fehler beim Loeschen der Notiz: {e}"
+            return f"Fehler beim Archivieren der Notiz: {e}"
 
     return ""
 
