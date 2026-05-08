@@ -39,7 +39,7 @@ Entwickelt für macOS (Apple Silicon M4) mit [Claude Code](https://claude.ai/cod
 - **Sprachgespräch** — Spreche frei auf Deutsch. Jarvis hört zu, denkt nach, antwortet per Stimme. Echo-Schutz verhindert Rückkopplungsschleifen.
 - **HUD-Klick-Stummschaltung** — Klick auf den animierten SVG-Ring schaltet das Mikrofon stumm/aktiv. Ring wird rot bei Stummschaltung.
 - **Texteingabe-Toggle** — Stift-Icon im Panel-Header blendet ein Texteingabefeld für getippte Befehle ein.
-- **Britischer Butler** — Trockene, witzige Persönlichkeit. Spricht dich immer mit "Sir" an.
+- **Britischer Butler** — Trockene, witzige Persönlichkeit. Spricht dich mit deiner konfigurierten Anrede an (Sir, Ms. Schmidt, Chef, …).
 - **Wetter & Aufgaben** — Beim Start: aktuelles Wetter (Kachelmann API + HA-Wetterstation) und heutige offene Erinnerungen.
 - **Apple Erinnerungen** — Erinnerungen lesen, hinzufügen und abhaken via AppleScript. Optimistische UI-Updates — kein 25-Sekunden-Freeze.
 - **Apple Mail** — Ungelesene Mails auf Anfrage vorlesen.
@@ -128,7 +128,7 @@ Du (sprechen) → Chrome Browser (Web Speech API de-DE) → FastAPI Server (loca
      "elevenlabs_api_key": "sk_...",
      "elevenlabs_voice_id": "DEINE_VOICE_ID",
      "user_name": "Dein Name",
-     "user_address": "Sir",
+     "user_address": "Sir",          // Männlich: Sir, Boss | Weiblich: Ms. Schmidt, Mrs. Müller, Miss Brown, Madam
      "city": "Deine Stadt"
    }
    ```

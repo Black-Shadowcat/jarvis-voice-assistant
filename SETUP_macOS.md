@@ -68,7 +68,9 @@ Falls Chrome fehlt → den Nutzer bitten Chrome zu installieren (google.com/chro
 Stelle diese Fragen **einzeln nacheinander**:
 
 1. **„Wie heißt du?"** → `user_name` (z.B. „Matthias")
-2. **„Wie soll Jarvis dich ansprechen?"** → `user_address` (z.B. „Sir", „Chef", „Boss", „Kapitän")
+2. **„Wie soll Jarvis dich ansprechen?"** → `user_address`
+   - Männlich: „Sir", „Chef", „Boss", „Kapitän"
+   - Weiblich: „Ms. Schmidt", „Mrs. Müller", „Miss Brown", „Madam"
 3. **„In welcher Stadt wohnst du?"** → `city` (z.B. „Hamburg")
 4. **„Was sind deine GPS-Koordinaten?"** → `lat` / `lon`
    - Tipp: maps.google.com → rechtsklick auf Standort → Koordinaten kopieren

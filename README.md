@@ -43,7 +43,7 @@ Built for macOS (Apple Silicon M4) with [Claude Code](https://claude.ai/code). K
 - **Voice Conversation** — Speak freely in German. Jarvis listens, thinks, responds with voice. Echo protection prevents feedback loops.
 - **HUD Click Mute** — Click the animated SVG ring to mute/unmute the microphone. Ring turns red when muted.
 - **Text Input Toggle** — Pencil icon in the panel header reveals a text input field for typed commands.
-- **Sarcastic British Butler** — Dry, witty personality. Always addresses you as "Sir".
+- **Sarcastic British Butler** — Dry, witty personality. Addresses you by your configured title (Sir, Ms. Smith, Chef, …).
 - **Weather & Tasks** — On startup: current weather (Kachelmann API + HA weather station) and today's open reminders.
 - **Apple Reminders** — Read, add, and complete reminders via AppleScript. Optimistic UI updates — no 25-second freeze.
 - **Apple Mail** — Read unread mails on request.
@@ -131,7 +131,7 @@ You (speak) → Chrome Browser (Web Speech API de-DE) → FastAPI Server (localh
      "elevenlabs_api_key": "sk_...",
      "elevenlabs_voice_id": "YOUR_VOICE_ID",
      "user_name": "Your Name",
-     "user_address": "Sir",
+     "user_address": "Sir",          // Male: Sir, Boss | Female: Ms. Smith, Mrs. Johnson, Miss Brown, Madam
      "city": "Your City"
    }
    ```
