@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), version
 
 ---
 
+## [2.4.1] — 2026-05-08
+
+### Fixed
+- `UnboundLocalError: 'OBSIDIAN_INBOX'` in `save_config_api` — `OBSIDIAN_INBOX` und `OBSIDIAN_ARCHIVE` wurden in der Funktion zugewiesen ohne `global`-Deklaration. Python behandelte sie dadurch als lokale Variablen, was beim Speichern der Config (insbesondere nach Sprach-Wechsel) zu einem 500-Fehler führte.
+- `NEWS_BRIEF` meldete "Keine neuen Artikel" obwohl ungelesene Artikel im Archiv lagen — Action berichtet jetzt alle `read: False` Einträge aus dem Archiv, nicht nur frisch geholte. `NewsSystem.get_unread_articles()` hinzugefügt.
+
+---
+
 ## [2.4.0] — 2026-05-08
 
 ### Added
