@@ -968,7 +968,6 @@ end tell'''
         if not OBSIDIAN_INBOX:
             return "Obsidian Inbox Pfad nicht konfiguriert."
         try:
-            import os
             from datetime import datetime
             os.makedirs(OBSIDIAN_INBOX, exist_ok=True)
             ts = datetime.now()
@@ -987,7 +986,6 @@ end tell'''
         if not OBSIDIAN_INBOX:
             return "Obsidian Inbox Pfad nicht konfiguriert."
         try:
-            import os
             files = sorted([
                 f for f in os.listdir(OBSIDIAN_INBOX)
                 if f.endswith(".md")
