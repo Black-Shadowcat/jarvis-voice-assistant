@@ -212,6 +212,39 @@ import screen_capture
 with open(os.path.join(os.path.dirname(__file__), "version.json")) as _vf:
     _VERSION_INFO: dict = json.load(_vf)
 
+_update_cache: dict = {"checked_at": None, "result": None}
+
+def _semver_gt(a: str, b: str) -> bool:
+    try:
+        return [int(x) for x in a.lstrip("v").split(".")] > [int(x) for x in b.lstrip("v").split(".")]
+    except Exception:
+        return False
+
+async def _check_for_update() -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                "https://api.github.com/repos/Black-Shadowcat/jarvis-voice-assistant/releases/latest",
+                headers={"Accept": "application/vnd.github+json", "User-Agent": "Jarvis-UpdateCheck/1"}
+            )
+        if r.status_code != 200:
+            return {"has_update": False}
+        data = r.json()
+        latest = data.get("tag_name", "").lstrip("v")
+        current = _VERSION_INFO.get("version", "0.0.0")
+        has_update = _semver_gt(latest, current)
+        latest_parts  = [int(x) for x in latest.split(".")]
+        current_parts = [int(x) for x in current.split(".")]
+        return {
+            "has_update": has_update,
+            "current_version": current,
+            "latest_version": latest,
+            "release_url": data.get("html_url", ""),
+            "is_major": has_update and latest_parts[0] > current_parts[0],
+        }
+    except Exception:
+        return {"has_update": False}
+
 
 SYMBOL_DE: dict[str, str] = {
     "sunny": "Sonnig",
@@ -2207,6 +2240,16 @@ async def get_language():
     return {"language": LANGUAGE, "speech_lang": "en-US" if LANGUAGE == "en" else "de-DE"}
 
 
+@app.get("/api/update_check")
+async def update_check():
+    import time
+    now = time.time()
+    if _update_cache["checked_at"] is None or now - _update_cache["checked_at"] > 86400:
+        _update_cache["result"] = await _check_for_update()
+        _update_cache["checked_at"] = now
+    return _update_cache["result"] or {"has_update": False}
+
+
 @app.get("/")
 async def serve_index():
     return FileResponse(os.path.join(os.path.dirname(__file__), "frontend", "index.html"))
@@ -2272,7 +2315,17 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app):
     asyncio.create_task(startup_and_refresh())
+    asyncio.create_task(_startup_update_check())
     yield
+
+async def _startup_update_check():
+    await asyncio.sleep(30)
+    import time
+    _update_cache["result"] = await _check_for_update()
+    _update_cache["checked_at"] = time.time()
+    if _update_cache["result"].get("has_update"):
+        v = _update_cache["result"].get("latest_version", "")
+        print(f"[jarvis] Update verfügbar: v{v}", flush=True)
 
 app.router.lifespan_context = lifespan
 
