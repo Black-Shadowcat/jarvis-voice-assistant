@@ -15,5 +15,7 @@
   "obsidian_inbox_path": "",
   "obsidian_archive_path": "",
   "programs": [null, null, null, null, null, null],
-  "wake_greeting_enabled": true
+  "wake_greeting_enabled": true,
+  "language": "de",
+  "_language_hint": "Sprache für Antworten und Spracherkennung: 'de' oder 'en'"
 }

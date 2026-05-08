@@ -646,7 +646,7 @@ function initSpeechRecognition() {
     if (!SR) return console.warn('[Jarvis] Speech Recognition nicht unterstützt');
 
     recognition = new SR();
-    recognition.lang = 'de-DE';
+    recognition.lang = window.JARVIS_SPEECH_LANG || 'de-DE';
     recognition.continuous = true;
     recognition.interimResults = false;
 
@@ -972,6 +972,13 @@ document.addEventListener('click', e => {
 // ── Init ──
 document.addEventListener('DOMContentLoaded', async () => {
     setOrbState('idle');
+
+    try {
+        const lr = await fetch('/api/language');
+        const ld = await lr.json();
+        window.JARVIS_SPEECH_LANG = ld.speech_lang || 'de-DE';
+    } catch { window.JARVIS_SPEECH_LANG = 'de-DE'; }
+
     initSpeechRecognition();
 
     // Load data first, THEN initialize WebSocket

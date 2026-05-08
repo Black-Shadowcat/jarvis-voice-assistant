@@ -24,6 +24,7 @@ async function loadConfig() {
         document.getElementById('userAddress').value = data.user_address || '';
         document.getElementById('city').value = data.city || '';
         document.getElementById('timezone').value = data.timezone || 'Europe/Berlin';
+        document.getElementById('language').value = data.language || 'de';
         document.getElementById('lat').value = data.lat || '';
         document.getElementById('lon').value = data.lon || '';
         document.getElementById('kachelmannKey').value = data.kachelmann_api_key || '';
@@ -351,6 +352,7 @@ async function saveConfig() {
         user_address: document.getElementById('userAddress').value,
         city: document.getElementById('city').value,
         timezone: document.getElementById('timezone').value,
+        language: document.getElementById('language').value,
         lat: parseFloat(document.getElementById('lat').value),
         lon: parseFloat(document.getElementById('lon').value),
         kachelmann_api_key: document.getElementById('kachelmannKey').value,

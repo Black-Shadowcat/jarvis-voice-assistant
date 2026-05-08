@@ -73,6 +73,7 @@ OBSIDIAN_ARCHIVE = config.get("obsidian_archive_path", "")
 HA_URL = config.get("ha_url", "").rstrip("/") if config.get("ha_enabled", True) else ""
 HA_TOKEN = config.get("ha_token", "")
 WAKE_GREETING_ENABLED = config.get("wake_greeting_enabled", True)
+LANGUAGE = config.get("language", "de")
 
 LIGHT_MAP: dict[str, str | list[str]] = {
     # Alle
@@ -549,7 +550,19 @@ def build_system_prompt():
         if headlines:
             news_block = "\nRSS-Neuigkeiten: " + " | ".join(headlines)
 
-    return f"""Du bist Jarvis, der KI-Assistent von Tony Stark aus Iron Man. Du dienst {USER_NAME}, wohnhaft in {CITY}. Du sprichst ausschliesslich Deutsch. {USER_NAME} moechte mit "{USER_ADDRESS}" angesprochen und gesiezt werden. Nutze "Sie" als Pronomen — FALSCH: "{USER_ADDRESS} planen", RICHTIG: "Sie planen, {USER_ADDRESS}". Dein Ton ist trocken, sarkastisch und britisch-hoeflich - wie ein Butler der alles gesehen hat und trotzdem loyal bleibt. Du machst subtile, trockene Bemerkungen, bist aber niemals respektlos. Wenn {USER_ADDRESS} eine offensichtliche Frage stellt, darfst du mit elegantem Sarkasmus antworten. Du bist hochintelligent, effizient und immer einen Schritt voraus. Halte deine Antworten kurz - maximal 3 Saetze. Du kommentierst fragwuerdige Entscheidungen hoeflich aber spitz.
+    if LANGUAGE == "en":
+        _lang_block = (
+            f'You speak exclusively English. '
+            f'{USER_NAME} wishes to be addressed as "{USER_ADDRESS}".'
+        )
+    else:
+        _lang_block = (
+            f'Du sprichst ausschliesslich Deutsch. '
+            f'{USER_NAME} moechte mit "{USER_ADDRESS}" angesprochen und gesiezt werden. '
+            f'Nutze "Sie" als Pronomen — FALSCH: "{USER_ADDRESS} planen", RICHTIG: "Sie planen, {USER_ADDRESS}".'
+        )
+
+    return f"""Du bist Jarvis, der KI-Assistent von Tony Stark aus Iron Man. Du dienst {USER_NAME}, wohnhaft in {CITY}. {_lang_block} Dein Ton ist trocken, sarkastisch und britisch-hoeflich - wie ein Butler der alles gesehen hat und trotzdem loyal bleibt. Du machst subtile, trockene Bemerkungen, bist aber niemals respektlos. Wenn {USER_ADDRESS} eine offensichtliche Frage stellt, darfst du mit elegantem Sarkasmus antworten. Du bist hochintelligent, effizient und immer einen Schritt voraus. Halte deine Antworten kurz - maximal 3 Saetze. Du kommentierst fragwuerdige Entscheidungen hoeflich aber spitz.
 
 WICHTIG: Schreibe NIEMALS Regieanweisungen, Emotionen oder Tags in eckigen Klammern wie [sarcastic] [formal] [amused] [dry] oder aehnliches. Dein Sarkasmus muss REIN durch die Wortwahl kommen. Alles was du schreibst wird laut vorgelesen.
 
@@ -1222,7 +1235,7 @@ async def handle_structured_action(structured: ActionModel, ws: WebSocket, sessi
             model="claude-haiku-4-5-20251001",
             max_tokens=80,
             system=(
-                f"Antworte in einem einzigen kurzen Satz auf Deutsch. "
+                f"Antworte in einem einzigen kurzen Satz auf {'Englisch' if LANGUAGE == 'en' else 'Deutsch'}. "
                 f"Keine Einleitung, kein 'Sehr gerne', kein 'Natuerlich', kein 'Gerne', kein 'Hier'. "
                 f"Keine Wiederholung der Anfrage. Nur die reine Information. "
                 f"Du darfst '{USER_ADDRESS}' genau einmal verwenden, bevorzugt am Satzende. "
@@ -1441,7 +1454,7 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
             model="claude-haiku-4-5-20251001",
             max_tokens=80,
             system=(
-                f"Antworte in einem einzigen kurzen Satz auf Deutsch. "
+                f"Antworte in einem einzigen kurzen Satz auf {'Englisch' if LANGUAGE == 'en' else 'Deutsch'}. "
                 f"Keine Einleitung, kein 'Sehr gerne', kein 'Natuerlich', kein 'Gerne', kein 'Hier'. "
                 f"Keine Wiederholung der Anfrage. Nur die reine Information. "
                 f"Du darfst '{USER_ADDRESS}' genau einmal verwenden, bevorzugt am Satzende. "
@@ -2109,7 +2122,7 @@ async def get_config_api():
 @app.post("/api/config")
 async def save_config_api(request: Request):
     global ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
-    global USER_NAME, USER_ADDRESS, CITY, LAT, LON
+    global USER_NAME, USER_ADDRESS, CITY, LAT, LON, LANGUAGE
     global KACHELMANN_KEY, HA_URL, HA_TOKEN, ai, WAKE_GREETING_ENABLED
 
     data = await request.json()
@@ -2122,7 +2135,7 @@ async def save_config_api(request: Request):
         "user_name", "user_address", "city", "timezone", "lat", "lon",
         "kachelmann_api_key", "ha_url", "ha_token", "ha_enabled",
         "workspace_path", "obsidian_inbox_path", "obsidian_archive_path", "browser_url",
-        "spotify_track", "programs", "wake_greeting_enabled",
+        "spotify_track", "programs", "wake_greeting_enabled", "language",
         "window_layout",
     ]
     for field in allowed:
@@ -2149,6 +2162,7 @@ async def save_config_api(request: Request):
     HA_URL = cfg.get("ha_url", "").rstrip("/") if cfg.get("ha_enabled", True) else ""
     HA_TOKEN = cfg.get("ha_token", HA_TOKEN)
     WAKE_GREETING_ENABLED = cfg.get("wake_greeting_enabled", True)
+    LANGUAGE = cfg.get("language", LANGUAGE)
     OBSIDIAN_INBOX   = cfg.get("obsidian_inbox_path", OBSIDIAN_INBOX)
     OBSIDIAN_ARCHIVE = cfg.get("obsidian_archive_path", OBSIDIAN_ARCHIVE)
     ai = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
@@ -2188,6 +2202,11 @@ app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__
 @app.get("/api/version")
 async def get_version():
     return _VERSION_INFO
+
+
+@app.get("/api/language")
+async def get_language():
+    return {"language": LANGUAGE, "speech_lang": "en-US" if LANGUAGE == "en" else "de-DE"}
 
 
 @app.get("/")
