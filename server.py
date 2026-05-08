@@ -75,6 +75,14 @@ HA_TOKEN = config.get("ha_token", "")
 WAKE_GREETING_ENABLED = config.get("wake_greeting_enabled", True)
 LANGUAGE = config.get("language", "de")
 
+def _load_locale() -> dict:
+    lang = LANGUAGE if LANGUAGE in ("de", "en") else "de"
+    path = os.path.join(os.path.dirname(__file__), "locales", f"{lang}.json")
+    with open(path, encoding="utf-8") as _lf:
+        return json.load(_lf)
+
+_L: dict = _load_locale()
+
 LIGHT_MAP: dict[str, str | list[str]] = {
     # Alle
     "alle":          "light.alle_lichter",
@@ -170,6 +178,7 @@ _last_licht_room: str | None = None
 _licht_room_lock = asyncio.Lock()
 
 daily_brief = DailyBrief()
+daily_brief.set_locale(_L)
 _last_activate_spoken: Optional[datetime] = None
 _last_wake_spoken: Optional[datetime] = None
 _morning_news_text: str = ""  # spoken after morning brief — set in morning trigger path
@@ -1175,7 +1184,7 @@ async def handle_licht_structured(params: LichtParameters) -> str:
 
     if cmd == "turn_off":
         if same_room:
-            return random.choice([f"Ist aus{sir}.", f"Ausgeschaltet{sir}.", f"Erledigt{sir}."])
+            return random.choice([t.format(sir=sir) for t in _L.get("light_off", [f"Ist aus{sir}.", f"Ausgeschaltet{sir}.", f"Erledigt{sir}."])])
         return random.choice([
             f"{room_label} ausgeschaltet{sir}.",
             f"{room_label} ist aus{sir}.",
@@ -1195,7 +1204,7 @@ async def handle_licht_structured(params: LichtParameters) -> str:
         ])
 
     if same_room:
-        return random.choice([f"Eingeschaltet{sir}.", f"Ist an{sir}.", f"Erledigt{sir}."])
+        return random.choice([t.format(sir=sir) for t in _L.get("light_on", [f"Eingeschaltet{sir}.", f"Ist an{sir}.", f"Erledigt{sir}."])])
     return random.choice([
         f"{room_label} eingeschaltet{sir}.",
         f"{room_label} ist an{sir}.",
@@ -1325,16 +1334,12 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
                     a1, a2 = items[0], items[1]
                     t1 = _clean_news_title(a1["title"])
                     t2 = _clean_news_title(a2["title"])
-                    _morning_news_text = (
-                        f"Aus Ihren Feeds: Bei {a1['source']} geht es um {t1}. "
-                        f"Außerdem bei {a2['source']}: {t2}."
-                    )
+                    _morning_news_text = _L.get("news_2", "Aus Ihren Feeds: Bei {s1} geht es um {t1}. Außerdem bei {s2}: {t2}.").format(
+                        s1=a1["source"], t1=t1, s2=a2["source"], t2=t2)
                 elif len(items) == 1:
                     a = items[0]
-                    _morning_news_text = (
-                        f"Aus Ihren Feeds: Bei {a['source']} geht es heute um "
-                        f"{_clean_news_title(a['title'])}."
-                    )
+                    _morning_news_text = _L.get("news_1", "Aus Ihren Feeds: Bei {s1} geht es heute um {t1}.").format(
+                        s1=a["source"], t1=_clean_news_title(a["title"]))
                 else:
                     _morning_news_text = ""
             else:
@@ -1370,10 +1375,13 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
             # No pause — simple ready acknowledgment, reset activity timer
             daily_brief.update_activity()
             phrases = [
-                f"Ich bin wieder da, {USER_ADDRESS}.",
-                f"Wieder online, {USER_ADDRESS}.",
-                f"Zurück, {USER_ADDRESS}.",
-                f"Bereit, {USER_ADDRESS}.",
+                t.format(address=USER_ADDRESS)
+                for t in _L.get("reconnect", [
+                    f"Ich bin wieder da, {USER_ADDRESS}.",
+                    f"Wieder online, {USER_ADDRESS}.",
+                    f"Zurück, {USER_ADDRESS}.",
+                    f"Bereit, {USER_ADDRESS}.",
+                ])
             ]
             await asyncio.sleep(0.8)
             await _speak(ws, session_id, random.choice(phrases))
@@ -1683,11 +1691,14 @@ def _format_weather_str(info: dict) -> str:
         return ""
     temp = info.get("temp", "")
     desc = info.get("description", "")
+    dec = _L.get("weather", {}).get("temp_decimal", ",")
     if isinstance(temp, (int, float)):
-        temp_str = f"{temp:.1f}".replace(".", ",").rstrip("0").rstrip(",")
+        temp_str = f"{temp:.1f}".replace(".", dec).rstrip("0").rstrip(dec)
     else:
         temp_str = str(temp)
-    return f"{temp_str} Grad, {desc}" if desc else f"{temp_str} Grad"
+    fmt = _L.get("weather", {}).get("temp_format", "{temp} Grad")
+    base = fmt.format(temp=temp_str)
+    return f"{base}, {desc}" if desc else base
 
 
 async def _ensure_weather(loop) -> str:
@@ -1844,10 +1855,8 @@ async def wake_notification():
     # _last_activate_spoken setzen damit der anschließende WS-Reconnect-"Jarvis activate"
     # nicht noch eine zweite Ansage auslöst (der Wake-Endpoint übernimmt die Begrüßung).
     _last_activate_spoken = now
-    greeting = random.choice([
-        f"Willkommen zurück, {USER_ADDRESS}.",
-        f"Schön, Sie wieder zu haben, {USER_ADDRESS}.",
-    ])
+    _absence_no_mail = _L.get("absence_brief", {}).get("no_mail", [f"Willkommen zurück, {USER_ADDRESS}."])
+    greeting = random.choice([t.format(address=USER_ADDRESS) for t in _absence_no_mail])
     daily_brief.update_activity()
     for ws in list(active_connections):
         sid = str(id(ws))
@@ -2153,7 +2162,7 @@ async def get_config_api():
 @app.post("/api/config")
 async def save_config_api(request: Request):
     global ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
-    global USER_NAME, USER_ADDRESS, CITY, LAT, LON, LANGUAGE
+    global USER_NAME, USER_ADDRESS, CITY, LAT, LON, LANGUAGE, _L
     global KACHELMANN_KEY, HA_URL, HA_TOKEN, ai, WAKE_GREETING_ENABLED
 
     data = await request.json()
@@ -2194,6 +2203,8 @@ async def save_config_api(request: Request):
     HA_TOKEN = cfg.get("ha_token", HA_TOKEN)
     WAKE_GREETING_ENABLED = cfg.get("wake_greeting_enabled", True)
     LANGUAGE = cfg.get("language", LANGUAGE)
+    _L = _load_locale()
+    daily_brief.set_locale(_L)
     OBSIDIAN_INBOX   = cfg.get("obsidian_inbox_path", OBSIDIAN_INBOX)
     OBSIDIAN_ARCHIVE = cfg.get("obsidian_archive_path", OBSIDIAN_ARCHIVE)
     ai = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)

@@ -27,6 +27,19 @@ _EMPTY_STATE = {
 class DailyBrief:
     def __init__(self):
         self._data: dict = self.load()
+        self._loc: dict = {}
+
+    def set_locale(self, loc: dict) -> None:
+        self._loc = loc
+
+    def _t(self, *keys, default=""):
+        """Navigate nested locale keys and return the value."""
+        v = self._loc
+        for k in keys:
+            if not isinstance(v, dict):
+                return default
+            v = v.get(k, default)
+        return v
 
     # ── Persistence ──────────────────────────────────────────────────────────
 
@@ -173,84 +186,78 @@ class DailyBrief:
 
         now = datetime.now()
         hour = now.hour
-        weekday = now.weekday()  # 0=Mon, 6=Sun
-        day_names = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+        weekday = now.weekday()
+        mb = self._t("morning_brief") or {}
+        day_names = self._t("day_names") or ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"]
+        g = self._t("greetings") or {}
 
         if hour < 11:
-            greeting = "Guten Morgen"
+            greeting = g.get("morning", "Guten Morgen")
         elif hour < 14:
-            greeting = "Guten Tag"
+            greeting = g.get("midday", "Guten Tag")
         elif hour < 18:
-            greeting = "Guten Nachmittag"
+            greeting = g.get("afternoon", "Guten Nachmittag")
         else:
-            greeting = "Guten Abend"
+            greeting = g.get("evening", "Guten Abend")
 
         parts = [f"{greeting}, {user_address}."]
 
         # Day context (morning only)
         if hour < 13:
             day = day_names[weekday]
-            if weekday >= 5:
-                parts.append(f"Genießen Sie Ihren {day}.")
-            else:
-                parts.append(f"Es ist {day}.")
+            tpl = mb.get("weekend_day", "Genießen Sie Ihren {day}.") if weekday >= 5 else mb.get("weekday", "Es ist {day}.")
+            parts.append(tpl.format(day=day))
 
         # Weather + advisory
         if weather:
             parts.append(weather.rstrip(".") + ".")
+            wloc = self._t("weather") or {}
             w = weather.lower()
-            if any(x in w for x in ["regen", "schauer", "niesel", "sprühregen"]):
-                parts.append("Vergessen Sie Ihren Schirm nicht.")
-            elif any(x in w for x in ["schnee", "eis", "frost", "glätte"]):
-                parts.append("Die Straßen könnten glatt sein — bitte vorsichtig.")
-            elif any(x in w for x in ["sturm", "gewitter", "böen", "orkan"]):
-                parts.append("Starker Wind heute — passen Sie auf sich auf.")
-            elif any(x in w for x in ["sonnig", "klar", "heiter", "wolkenlos"]):
-                parts.append("Ein schöner Tag draußen.")
+            if any(x in w for x in wloc.get("rain_keywords", ["regen","schauer"])):
+                parts.append(wloc.get("rain", "Vergessen Sie Ihren Schirm nicht."))
+            elif any(x in w for x in wloc.get("snow_keywords", ["schnee","eis"])):
+                parts.append(wloc.get("snow", "Die Straßen könnten glatt sein."))
+            elif any(x in w for x in wloc.get("storm_keywords", ["sturm","gewitter"])):
+                parts.append(wloc.get("storm", "Starker Wind heute."))
+            elif any(x in w for x in wloc.get("sunny_keywords", ["sonnig","klar"])):
+                parts.append(wloc.get("sunny", "Ein schöner Tag draußen."))
 
         # Mail
         if mails:
             n = len(mails)
             if n == 1:
-                parts.append("Eine neue Mail wartet auf Sie.")
+                parts.append(mb.get("mail_1", "Eine neue Mail wartet auf Sie."))
             elif n <= 4:
-                parts.append(f"{n} ungelesene Mails.")
+                parts.append(mb.get("mail_few", "{n} ungelesene Mails.").format(n=n))
             else:
-                parts.append(f"{n} ungelesene Mails in Ihrem Postfach.")
+                parts.append(mb.get("mail_many", "{n} ungelesene Mails in Ihrem Postfach.").format(n=n))
 
-        # Tasks and reminders (split for nuance)
+        # Tasks and reminders
         if tasks and reminders:
             t, r = len(tasks), len(reminders)
-            parts.append(
-                f"{t} {'Aufgabe' if t == 1 else 'Aufgaben'} und "
-                f"{r} {'Erinnerung' if r == 1 else 'Erinnerungen'} stehen noch aus."
-            )
+            tw = mb.get("task_word_1","Aufgabe") if t==1 else mb.get("task_word_many","Aufgaben")
+            rw = mb.get("reminder_word_1","Erinnerung") if r==1 else mb.get("reminder_word_many","Erinnerungen")
+            parts.append(mb.get("tasks_and_reminders","{t} {task_word} und {r} {reminder_word} stehen noch aus.").format(t=t,task_word=tw,r=r,reminder_word=rw))
         elif tasks:
             t = len(tasks)
-            parts.append(f"{t} {'Aufgabe' if t == 1 else 'Aufgaben'} auf der Liste.")
+            tw = mb.get("task_word_1","Aufgabe") if t==1 else mb.get("task_word_many","Aufgaben")
+            parts.append(mb.get("only_tasks","{t} {task_word} auf der Liste.").format(t=t,task_word=tw))
         elif reminders:
             r = len(reminders)
-            parts.append(f"{r} {'Erinnerung' if r == 1 else 'Erinnerungen'} für heute.")
+            rw = mb.get("reminder_word_1","Erinnerung") if r==1 else mb.get("reminder_word_many","Erinnerungen")
+            parts.append(mb.get("only_reminders","{r} {reminder_word} für heute.").format(r=r,reminder_word=rw))
 
         # Notes
         if notes:
             n = len(notes)
-            parts.append(f"{n} offene {'Notiz' if n == 1 else 'Notizen'} in Obsidian.")
+            nw = mb.get("note_word_1","Notiz") if n==1 else mb.get("note_word_many","Notizen")
+            parts.append(mb.get("notes","{n} offene {note_word} in Obsidian.").format(n=n,note_word=nw))
 
         # Closing
         if not mails and not tasks and not reminders and not notes:
-            parts.append(random.choice([
-                "Alles erledigt — ein ruhiger Start.",
-                "Keine offenen Punkte. Der Tag gehört Ihnen.",
-                "Postfach und Aufgaben: leer. Ein entspannter Beginn.",
-            ]))
+            parts.append(random.choice(mb.get("no_items",["Alles erledigt — ein ruhiger Start."])))
         else:
-            parts.append(random.choice([
-                "Ich stehe bereit.",
-                "Wie kann ich Ihnen behilflich sein?",
-                "Was darf ich für Sie tun?",
-                "Womit soll ich beginnen?",
-            ]))
+            parts.append(random.choice(mb.get("closing",["Ich stehe bereit."])))
 
         return " ".join(parts)
 
@@ -272,6 +279,7 @@ class DailyBrief:
             self._data["last_morning_brief"]["mail_count_mentioned"] = len(current_ids)
         self.update_activity()
 
+        pb = self._t("pause_brief") or {}
         if diff["new_count"] > 0:
             n = diff["new_count"]
             new_ids_set = set(diff["new_ids"])
@@ -280,18 +288,16 @@ class DailyBrief:
             senders = [m.get("sender", "").split("<")[0].strip() or m.get("sender", "Unbekannt")
                        for m in new_mails]
             if n == 1:
-                return random.choice([
-                    f"Willkommen zurück, {user_address}. Eine neue Mail von {senders[0]}.",
-                    f"Eine neue Mail von {senders[0]} ist eingegangen, {user_address}.",
-                ])
+                return random.choice([t.format(address=user_address, sender=senders[0])
+                                      for t in pb.get("new_mail_1", [f"Willkommen zurück, {user_address}. Eine neue Mail von {senders[0]}."])])
             elif n == 2:
-                return f"Willkommen zurück, {user_address}. {n} neue Mails — von {senders[0]} und {senders[1]}."
+                return pb.get("new_mail_2", "Willkommen zurück, {address}. {n} neue Mails — von {s1} und {s2}.").format(
+                    address=user_address, n=n, s1=senders[0], s2=senders[1])
             else:
-                return f"Willkommen zurück, {user_address}. {n} neue Mails — unter anderem von {senders[0]}."
-        return random.choice([
-            f"Willkommen zurück, {user_address}.",
-            f"Alles ruhig, {user_address}. Keine neuen Mails.",
-        ])
+                return pb.get("new_mail_many", "Willkommen zurück, {address}. {n} neue Mails — unter anderem von {sender}.").format(
+                    address=user_address, n=n, sender=senders[0])
+        return random.choice([t.format(address=user_address)
+                               for t in pb.get("no_mail", [f"Willkommen zurück, {user_address}."])])
 
     def generate_absence_brief(self, current_mails: list, user_address: str) -> str:
         known_ids = self.get_known_mail_ids()
@@ -310,6 +316,7 @@ class DailyBrief:
             self._data["last_morning_brief"]["mail_count_mentioned"] = len(current_ids)
         self.update_activity()
 
+        ab = self._t("absence_brief") or {}
         if diff["new_count"] > 0:
             n = diff["new_count"]
             new_ids_set = set(diff["new_ids"])
@@ -318,32 +325,31 @@ class DailyBrief:
             senders = [m.get("sender", "").split("<")[0].strip() or m.get("sender", "Unbekannt")
                        for m in new_mails]
             if n == 1:
-                return random.choice([
-                    f"Schön, Sie wieder zu haben, {user_address}. Eine neue Mail von {senders[0]}.",
-                    f"Willkommen zurück. Während Ihrer Abwesenheit schrieb {senders[0]}.",
-                ])
+                return random.choice([t.format(address=user_address, sender=senders[0])
+                                      for t in ab.get("new_mail_1", [f"Schön, Sie wieder zu haben, {user_address}. Eine neue Mail von {senders[0]}."])])
             elif n == 2:
-                return f"Schön, Sie wieder zu haben, {user_address}. {n} neue Mails — von {senders[0]} und {senders[1]}."
+                return ab.get("new_mail_2", "Schön, Sie wieder zu haben, {address}. {n} neue Mails — von {s1} und {s2}.").format(
+                    address=user_address, n=n, s1=senders[0], s2=senders[1])
             else:
-                return f"Willkommen zurück, {user_address}. {n} neue Mails in Ihrer Abwesenheit — unter anderem von {senders[0]}."
-        return random.choice([
-            f"Schön, Sie wieder zu haben, {user_address}. Das Postfach war ruhig.",
-            f"Willkommen zurück, {user_address}. Keine neuen Mails.",
-        ])
+                return ab.get("new_mail_many", "Willkommen zurück, {address}. {n} neue Mails in Ihrer Abwesenheit — unter anderem von {sender}.").format(
+                    address=user_address, n=n, sender=senders[0])
+        return random.choice([t.format(address=user_address)
+                               for t in ab.get("no_mail", [f"Schön, Sie wieder zu haben, {user_address}. Das Postfach war ruhig."])])
 
     def generate_evening_brief(self, mails: list, weather: str, user_address: str) -> str:
         self._data["evening_briefing"]["done"] = True
         self.update_activity()
 
-        parts = [f"Feierabend, {user_address}."]
+        eb = self._t("evening_brief") or {}
+        parts = [eb.get("opening", "Feierabend, {address}.").format(address=user_address)]
         if mails:
             n = len(mails)
-            parts.append(f"Im Postfach: {n} ungelesene {'Mail' if n == 1 else 'Mails'}.")
+            mw = eb.get("mail_word_1","Mail") if n==1 else eb.get("mail_word_many","Mails")
+            parts.append(eb.get("mail","Im Postfach: {n} ungelesene {mail_word}.").format(n=n,mail_word=mw))
         else:
-            parts.append("Postfach ist leer.")
+            parts.append(eb.get("no_mail","Postfach ist leer."))
         if weather:
             parts.append(weather)
-
         return " ".join(parts)
 
     # ── State Accessors ───────────────────────────────────────────────────────
