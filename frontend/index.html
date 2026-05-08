@@ -415,7 +415,7 @@ body {
 
         <!-- Input -->
         <div class="chat-input-row">
-            <input type="text" id="jarvis-input" placeholder="Sprich oder tippe…">
+            <input type="text" id="jarvis-input" placeholder="Sprich oder tippe…" data-i18n-placeholder="input_placeholder">
             <button id="jarvis-send"><svg class="icon icon-send" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
         </div>
     </div>
@@ -426,11 +426,11 @@ body {
     <div class="panel-header">
         <div class="panel-title">
             <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-            Programme
+            <span data-i18n="panel_apps">Programme</span>
         </div>
     </div>
     <div class="panel-content" id="programs-container">
-        <div class="placeholder">Programme werden geladen…</div>
+        <div class="placeholder" data-i18n="loading_apps">Programme werden geladen…</div>
     </div>
 </div>
 
@@ -439,13 +439,13 @@ body {
     <div class="panel-header">
         <div class="panel-title">
             <svg class="icon" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>
-            Posteingang
+            <span data-i18n="panel_mail">Posteingang</span>
             <span class="badge" id="mail-count">0</span>
         </div>
         <span class="panel-action" onclick="openApp('Mail')" title="Mail öffnen"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span>
     </div>
     <div class="panel-content" id="mail-container">
-        <div class="placeholder">Mails werden geladen…</div>
+        <div class="placeholder" data-i18n="loading_mail">Mails werden geladen…</div>
     </div>
 </div>
 
@@ -454,7 +454,7 @@ body {
     <div class="panel-header">
         <div class="panel-title">
             <svg class="icon" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            Aufgaben
+            <span data-i18n="panel_tasks">Aufgaben</span>
             <span class="badge" id="task-count">0</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -463,15 +463,15 @@ body {
         </div>
     </div>
     <div class="panel-content" id="task-container" style="flex:1;min-height:0;">
-        <div class="placeholder">Aufgaben werden geladen…</div>
+        <div class="placeholder" data-i18n="loading_tasks">Aufgaben werden geladen…</div>
     </div>
     <div class="panel-section-divider">
         <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M4 22V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v18l-8-4-8 4z"/></svg>
-        Neuigkeiten
+        <span data-i18n="panel_news">Neuigkeiten</span>
         <span class="badge" id="news-count">—</span>
     </div>
     <div class="panel-content" id="news-container" style="flex:1;min-height:0;">
-        <div class="placeholder">↻ Klicke zum Laden</div>
+        <div class="placeholder" data-i18n="news_load_hint">↻ Klicke zum Laden</div>
     </div>
 </div>
 
@@ -485,8 +485,8 @@ body {
         <div class="news-popup-title" id="popup-title"></div>
         <div class="news-popup-meta" id="popup-meta"></div>
         <div class="news-popup-actions">
-            <button class="popup-btn popup-btn-primary" onclick="openNewsArticle()">Artikel öffnen ↗</button>
-            <button class="popup-btn popup-btn-close" onclick="closeNewsPopup()">Schließen</button>
+            <button class="popup-btn popup-btn-primary" onclick="openNewsArticle()" data-i18n="popup_open">Artikel öffnen ↗</button>
+            <button class="popup-btn popup-btn-close" onclick="closeNewsPopup()" data-i18n="popup_close">Schließen</button>
         </div>
     </div>
 </div>
@@ -503,6 +503,7 @@ body {
 
 <script>
 // ── State ──
+let _i18n        = {};
 let dashboardWs  = null;
 let audioQueue   = [];
 let isPlaying    = false;
@@ -553,11 +554,11 @@ function setOrbState(state) {
         muted:     { stroke:'#cc3333', opacity:'0.7' },
     };
     const labels = {
-        idle:      'Warte auf Eingabe…',
-        listening: '● Hört zu…',
-        speaking:  '◉ Spricht…',
-        thinking:  '◌ Denkt…',
-        muted:     '🎙 Mikrofon stumm',
+        idle:      _i18n.status_idle      || 'Warte auf Eingabe…',
+        listening: _i18n.status_listening || '● Hört zu…',
+        speaking:  _i18n.status_speaking  || '◉ Spricht…',
+        thinking:  _i18n.status_thinking  || '◌ Denkt…',
+        muted:     _i18n.status_muted     || '🎙 Mikrofon stumm',
     };
 
     const c = colors[state] || colors.idle;
@@ -643,7 +644,7 @@ function playNext() {
         isPlaying = false;
         setOrbState('idle');
         const st = document.getElementById('status-text');
-        if (st) st.textContent = '▶ Klicke um Jarvis zu hören';
+        if (st) st.textContent = _i18n.status_click_to_hear || '▶ Klicke um Jarvis zu hören';
         document.addEventListener('click', () => playNext(), { once: true });
     });
 }
@@ -742,7 +743,7 @@ function addMsg(sender, text) {
 
     const d = document.createElement('div');
     d.className = `msg ${sender}`;
-    d.innerHTML = `<strong>${sender === 'user' ? 'Du' : 'Jarvis'}:</strong> ${text}`;
+    d.innerHTML = `<strong>${sender === 'user' ? (_i18n.label_you || 'Du') : 'Jarvis'}:</strong> ${text}`;
     h.appendChild(d);
     h.scrollTop = h.scrollHeight;
 }
@@ -763,7 +764,7 @@ function sendChatMessage() {
     input.value = '';
     setOrbState('thinking');
     if (dashboardWs?.readyState === WebSocket.OPEN) wsSend({ text });
-    else { setOrbState('idle'); addMsg('jarvis', 'Fehler: Server nicht erreichbar.'); }
+    else { setOrbState('idle'); addMsg('jarvis', _i18n.error_server || 'Fehler: Server nicht erreichbar.'); }
 }
 
 // ── App öffnen ──
@@ -785,7 +786,7 @@ async function loadMails() {
         const { mails = [] } = await r.json();
         badge.textContent = mails.length;
         if (!mails.length) {
-            box.innerHTML = '<div class="placeholder">Keine ungelesenen Mails</div>';
+            box.innerHTML = `<div class="placeholder">${_i18n.empty_mail || 'Keine ungelesenen Mails'}</div>`;
             return;
         }
         box.innerHTML = mails.map(m => {
@@ -799,7 +800,7 @@ async function loadMails() {
             </div>`;
         }).join('');
     } catch {
-        box.innerHTML = '<div class="placeholder">Fehler beim Laden</div>';
+        box.innerHTML = `<div class="placeholder">${_i18n.error_load || 'Fehler beim Laden'}</div>`;
     }
 }
 
@@ -819,7 +820,7 @@ async function loadTasks() {
         badge.textContent = total;
 
         if (!total) {
-            box.innerHTML = '<div class="placeholder">Alles erledigt!</div>';
+            box.innerHTML = `<div class="placeholder">${_i18n.empty_tasks || 'Alles erledigt!'}</div>`;
             return;
         }
 
@@ -843,7 +844,7 @@ async function loadTasks() {
 
         box.innerHTML = tasksHtml + obsidianHtml;
     } catch {
-        box.innerHTML = '<div class="placeholder">Fehler beim Laden</div>';
+        box.innerHTML = `<div class="placeholder">${_i18n.error_load || 'Fehler beim Laden'}</div>`;
     }
 }
 
@@ -872,7 +873,7 @@ async function loadPrograms() {
         const config = await r.json();
         const programs = (config.programs || []).filter(p => p); // Filter out null/empty
         if (!programs.length) {
-            box.innerHTML = '<div class="placeholder">Keine Programme konfiguriert</div>';
+            box.innerHTML = `<div class="placeholder">${_i18n.empty_apps || 'Keine Programme konfiguriert'}</div>`;
             return;
         }
         box.innerHTML = programs.map(prog => `
@@ -985,7 +986,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         const lr = await fetch('/api/language');
         const ld = await lr.json();
         window.JARVIS_SPEECH_LANG = ld.speech_lang || 'de-DE';
+        const ir = await fetch(`/static/i18n/${ld.language || 'de'}.json`);
+        _i18n = await ir.json();
     } catch { window.JARVIS_SPEECH_LANG = 'de-DE'; }
+
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        if (_i18n[el.dataset.i18n]) el.textContent = _i18n[el.dataset.i18n];
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        if (_i18n[el.dataset.i18nPlaceholder]) el.placeholder = _i18n[el.dataset.i18nPlaceholder];
+    });
+    setOrbState('idle');
 
     initSpeechRecognition();
 
