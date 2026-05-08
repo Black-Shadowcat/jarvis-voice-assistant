@@ -68,7 +68,8 @@ CITY = config.get("city", "Hamburg")
 LAT = config.get("lat", 53.55)
 LON = config.get("lon", 10.00)
 KACHELMANN_KEY = config.get("kachelmann_api_key", "")
-OBSIDIAN_INBOX = config.get("obsidian_inbox_path", "")
+OBSIDIAN_INBOX   = config.get("obsidian_inbox_path", "")
+OBSIDIAN_ARCHIVE = config.get("obsidian_archive_path", "")
 HA_URL = config.get("ha_url", "").rstrip("/") if config.get("ha_enabled", True) else ""
 HA_TOKEN = config.get("ha_token", "")
 WAKE_GREETING_ENABLED = config.get("wake_greeting_enabled", True)
@@ -994,7 +995,7 @@ end tell'''
         if not OBSIDIAN_INBOX:
             return "Obsidian Inbox Pfad nicht konfiguriert."
         try:
-            erledigt_dir = os.path.join(OBSIDIAN_INBOX, "Erledigt")
+            erledigt_dir = OBSIDIAN_ARCHIVE if OBSIDIAN_ARCHIVE else os.path.join(OBSIDIAN_INBOX, "Erledigt")
             os.makedirs(erledigt_dir, exist_ok=True)
             keyword = p.strip().lower()
             files = [f for f in os.listdir(OBSIDIAN_INBOX) if f.endswith(".md")]
@@ -2120,7 +2121,7 @@ async def save_config_api(request: Request):
         "anthropic_api_key", "elevenlabs_api_key", "elevenlabs_voice_id",
         "user_name", "user_address", "city", "timezone", "lat", "lon",
         "kachelmann_api_key", "ha_url", "ha_token", "ha_enabled",
-        "workspace_path", "obsidian_inbox_path", "browser_url",
+        "workspace_path", "obsidian_inbox_path", "obsidian_archive_path", "browser_url",
         "spotify_track", "programs", "wake_greeting_enabled",
         "window_layout",
     ]
@@ -2148,6 +2149,8 @@ async def save_config_api(request: Request):
     HA_URL = cfg.get("ha_url", "").rstrip("/") if cfg.get("ha_enabled", True) else ""
     HA_TOKEN = cfg.get("ha_token", HA_TOKEN)
     WAKE_GREETING_ENABLED = cfg.get("wake_greeting_enabled", True)
+    OBSIDIAN_INBOX   = cfg.get("obsidian_inbox_path", OBSIDIAN_INBOX)
+    OBSIDIAN_ARCHIVE = cfg.get("obsidian_archive_path", OBSIDIAN_ARCHIVE)
     ai = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
     print(f"[jarvis] Config gespeichert via UI", flush=True)

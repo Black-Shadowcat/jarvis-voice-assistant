@@ -29,6 +29,7 @@ async function loadConfig() {
         document.getElementById('kachelmannKey').value = data.kachelmann_api_key || '';
         document.getElementById('workspacePath').value = data.workspace_path || '';
         document.getElementById('obsidianPath').value = data.obsidian_inbox_path || '';
+        document.getElementById('obsidianArchivePath').value = data.obsidian_archive_path || '';
         document.getElementById('haUrl').value = data.ha_url || '';
         document.getElementById('haToken').value = data.ha_token || '';
         document.getElementById('browserUrl').value = data.browser_url || '';
@@ -255,6 +256,14 @@ async function testKey(type) {
     }
 }
 
+function toggleObsidian() {
+    const fields = document.getElementById('obsidianFields');
+    const chevron = document.getElementById('obsidianChevron');
+    const open = fields.style.display === 'none';
+    fields.style.display = open ? 'block' : 'none';
+    chevron.textContent = open ? '▼' : '▶';
+}
+
 function toggleHA() {
     const toggle = document.getElementById('haToggle');
     const fields = document.getElementById('haFields');
@@ -343,6 +352,7 @@ async function saveConfig() {
         kachelmann_api_key: document.getElementById('kachelmannKey').value,
         workspace_path: document.getElementById('workspacePath').value,
         obsidian_inbox_path: document.getElementById('obsidianPath').value,
+        obsidian_archive_path: document.getElementById('obsidianArchivePath').value,
         ha_url: document.getElementById('haUrl').value,
         ha_token: document.getElementById('haToken').value,
         ha_enabled: document.getElementById('haToggle').classList.contains('on'),

@@ -13,6 +13,7 @@
   "ha_enabled": false,
   "workspace_path": "/Users/YOUR_USERNAME/jarvis-voice-assistant",
   "obsidian_inbox_path": "",
+  "obsidian_archive_path": "",
   "programs": [null, null, null, null, null, null],
   "wake_greeting_enabled": true
 }
