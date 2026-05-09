@@ -36,8 +36,8 @@ def notify_jarvis():
         print("[wake-monitor] Timeout — Screen blieb gesperrt, kein Brief", flush=True)
         return
 
-    # Small buffer after unlock so audio system is ready
-    time.sleep(3)
+    # Buffer after unlock: Chrome needs ~10s to reconnect WebSocket after sleep
+    time.sleep(10)
 
     for attempt in range(6):
         try:

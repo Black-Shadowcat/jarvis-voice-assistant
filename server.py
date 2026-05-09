@@ -1899,7 +1899,15 @@ async def wake_notification():
     print(f"[jarvis] Wake: {len(OBSIDIAN_INFO)} Obsidian-Notizen", flush=True)
 
     if not active_connections:
-        return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
+        # Chrome may still be reconnecting — wait up to 15s before giving up
+        for _ in range(5):
+            await asyncio.sleep(3)
+            if active_connections:
+                print(f"[jarvis] Wake: Browser nach Wartezeit verbunden", flush=True)
+                break
+        if not active_connections:
+            print(f"[jarvis] Wake: kein Browser verbunden — Brief übersprungen", flush=True)
+            return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
 
     daily_brief.load()
     loop = asyncio.get_event_loop()
