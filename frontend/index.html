@@ -705,14 +705,20 @@ function wsSend(obj) {
 }
 
 function initWS() {
-    if (dashboardWs && (dashboardWs.readyState === WebSocket.OPEN || dashboardWs.readyState === WebSocket.CONNECTING)) return;
+    const _rs = dashboardWs ? dashboardWs.readyState : -1;
+    if (dashboardWs && (_rs === WebSocket.OPEN || _rs === WebSocket.CONNECTING)) return;
     dashboardWs = new WebSocket(`ws://${location.host}/ws`);
     dashboardWs.onopen = () => {
         _wsDelay = 3000;
-        setOrbState('thinking');
         if (_wsIsFirst) {
             _wsIsFirst = false;
+            setOrbState('thinking');
             wsSend({ text: 'Jarvis activate' });
+        } else {
+            // Reconnect nach Sleep: HUD aus 'thinking', Recognition sauber neu anstoßen
+            setOrbState('idle');
+            if (recognition) { try { recognition.abort(); } catch(e) {} }
+            setTimeout(() => { if (!isListening) startListening(); }, 1200);
         }
     };
     dashboardWs.onmessage = e => {

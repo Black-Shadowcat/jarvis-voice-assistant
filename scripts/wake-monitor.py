@@ -4,8 +4,22 @@ import subprocess
 import urllib.request
 import time
 import sys
+import os
+import atexit
 
 JARVIS_WAKE_URL = "http://localhost:8340/api/wake"
+_LOCK = "/tmp/jarvis-wake-monitor.pid"
+
+if os.path.exists(_LOCK):
+    try:
+        old = int(open(_LOCK).read())
+        os.kill(old, 0)
+        print(f"[wake-monitor] Bereits aktiv (PID {old}) — beende Duplikat.", flush=True)
+        sys.exit(0)
+    except (OSError, ValueError):
+        print("[wake-monitor] stale pid lock detected, taking over", flush=True)
+open(_LOCK, "w").write(str(os.getpid()))
+atexit.register(lambda: os.path.exists(_LOCK) and os.remove(_LOCK))
 
 
 def is_screen_locked() -> bool:
@@ -15,7 +29,7 @@ def is_screen_locked() -> bool:
             ["ioreg", "-n", "Root", "-d1"],
             capture_output=True, text=True, timeout=5,
         )
-        return "CGSSessionScreenIsLocked = 1" in r.stdout
+        return '"IOConsoleLocked" = Yes' in r.stdout
     except Exception:
         return False
 
@@ -64,10 +78,15 @@ print("[wake-monitor] Überwache System-Wake-Events...", flush=True)
 
 last_wake = 0.0
 for line in proc.stdout:
-    if "Wake reason" in line:
+    if ("Wake reason" in line
+            and "Filtering the log data using" not in line
+            and "wifibt" not in line
+            and "E_RX_IP_PACKET" not in line
+            and "updateWoWReason" not in line):
         now = time.time()
         if now - last_wake < COOLDOWN:
             continue
         last_wake = now
         print(f"[wake-monitor] Wake erkannt: {line.strip()}", flush=True)
         notify_jarvis()
+        last_wake = time.time()  # restart cooldown after blocking call returns

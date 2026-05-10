@@ -1564,7 +1564,7 @@ async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     session_id = str(id(ws))
     active_connections.add(ws)
-    print(f"[jarvis] Client connected", flush=True)
+    print(f"[jarvis] WS connected  session={session_id} active={len(active_connections)}", flush=True)
 
     try:
         while True:
@@ -1577,8 +1577,10 @@ async def websocket_endpoint(ws: WebSocket):
             await process_message(session_id, user_text, ws)
 
     except WebSocketDisconnect:
-        active_connections.discard(ws)
         conversations.pop(session_id, None)
+    finally:
+        active_connections.discard(ws)
+        print(f"[jarvis] WS disconnected session={session_id} active={len(active_connections)}", flush=True)
 
 
 # ── Dashboard API Endpoints ──────────────────────────────────────────────
@@ -1925,14 +1927,19 @@ async def wake_notification():
                 active_connections.discard(ws)
         return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
 
-    # Schritt 1: sofortige Begrüßung — immer, unabhängig von Pause-Schwellenwert
-    # _last_activate_spoken setzen damit der anschließende WS-Reconnect-"Jarvis activate"
-    # nicht noch eine zweite Ansage auslöst (der Wake-Endpoint übernimmt die Begrüßung).
+    # Schritt 1: sofortige Begrüßung
+    # Debounce: falls process_message() bereits kurz zuvor ein Activate-Greeting gesprochen hat
+    # (z.B. Browser-Reconnect mit "Jarvis activate"), Wake-Greeting überspringen.
+    # _last_wake_spoken wurde oben bereits gesetzt — Wake-Cooldown bleibt erhalten.
+    if _last_activate_spoken and (datetime.now() - _last_activate_spoken).total_seconds() < 60:
+        print(f"[jarvis] Wake greeting debounced — activate already spoken, skipping", flush=True)
+        return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
     _last_activate_spoken = now
     _absence_no_mail = _L.get("absence_brief", {}).get("no_mail", [f"Willkommen zurück, {USER_ADDRESS}."])
     greeting = random.choice([t.format(address=USER_ADDRESS) for t in _absence_no_mail])
     daily_brief.update_activity()
-    for ws in list(active_connections):
+    _broadcast_targets = list(active_connections)
+    for ws in _broadcast_targets:
         sid = str(id(ws))
         if sid not in conversations:
             conversations[sid] = []
