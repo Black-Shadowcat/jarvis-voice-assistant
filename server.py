@@ -1379,7 +1379,8 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
             )
             # Prepare news snippet to speak after LLM brief (deterministic — no LLM creativity)
             if NEWS_INFO:
-                items = [a for a in NEWS_INFO[:2] if a.get("title")]
+                # Only use unread articles — avoids repeating the same items every morning
+                items = [a for a in NEWS_INFO if a.get("title") and not a.get("read")][:2]
                 if len(items) >= 2:
                     a1, a2 = items[0], items[1]
                     t1 = _clean_news_title(a1["title"])
@@ -1391,7 +1392,13 @@ async def process_message(session_id: str, user_text: str, ws: WebSocket):
                     _morning_news_text = _L.get("news_1", "Aus Ihren Feeds: Bei {s1} geht es heute um {t1}.").format(
                         s1=a["source"], t1=_clean_news_title(a["title"]))
                 else:
+                    items = []
                     _morning_news_text = ""
+                # Mark spoken articles as read so they don't repeat tomorrow
+                for a in items:
+                    a["read"] = True  # update in-memory state immediately
+                    if a.get("id"):
+                        asyncio.ensure_future(news.mark_as_read(a["id"]))
             else:
                 _morning_news_text = ""
             print(f"[jarvis] Activate → Morning Brief via LLM (news: {len(NEWS_INFO)} Artikel)", flush=True)
@@ -1928,6 +1935,11 @@ async def wake_notification():
         return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
 
     # Schritt 1: sofortige Begrüßung
+    # Vor 6 Uhr: User schläft — kein Greeting, nur Activity updaten
+    if datetime.now().hour < 6:
+        daily_brief.update_activity()
+        print(f"[jarvis] Wake vor 6 Uhr — stille Rückkehr, kein Greeting", flush=True)
+        return {"status": "ok", "notes": len(OBSIDIAN_INFO)}
     # Debounce: falls process_message() bereits kurz zuvor ein Activate-Greeting gesprochen hat
     # (z.B. Browser-Reconnect mit "Jarvis activate"), Wake-Greeting überspringen.
     # _last_wake_spoken wurde oben bereits gesetzt — Wake-Cooldown bleibt erhalten.

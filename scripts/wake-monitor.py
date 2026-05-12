@@ -6,6 +6,7 @@ import time
 import sys
 import os
 import atexit
+import threading
 
 JARVIS_WAKE_URL = "http://localhost:8340/api/wake"
 _LOCK = "/tmp/jarvis-wake-monitor.pid"
@@ -65,7 +66,73 @@ def notify_jarvis():
             time.sleep(5)
 
 
-COOLDOWN = 120  # seconds — macOS logs multiple "Wake reason" lines per wake event
+def get_user_idle_seconds() -> float | None:
+    """Returns seconds since last user input event via HIDIdleTime, or None on error."""
+    try:
+        r = subprocess.run(
+            ["ioreg", "-c", "IOHIDSystem"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in r.stdout.splitlines():
+            if "HIDIdleTime" in line:
+                # Format: "HIDIdleTime" = 12345678901
+                ns = int(line.split("=")[-1].strip())
+                return ns / 1_000_000_000
+        return None
+    except Exception:
+        return None
+
+
+COOLDOWN = 120  # seconds — shared between log-stream thread and display-wake thread
+_wake_lock = threading.Lock()
+_last_wake = 0.0
+
+
+def _try_trigger(label: str) -> None:
+    """Thread-safe cooldown check + notify. Fires if cooldown has passed."""
+    global _last_wake
+    now = time.time()
+    with _wake_lock:
+        if now - _last_wake < COOLDOWN:
+            return
+        _last_wake = now
+    print(f"[wake-monitor] Wake erkannt ({label})", flush=True)
+    notify_jarvis()
+    with _wake_lock:
+        _last_wake = time.time()  # restart cooldown after blocking call returns
+
+
+# Threshold: if idle was above this and drops below 30s, the display was woken by user
+_DISPLAY_SLEEP_THRESHOLD = 600  # 10 min — avoids false triggers from brief pauses
+
+
+def display_wake_watcher() -> None:
+    """
+    Polls HIDIdleTime every 10s. Detects display-only wakes (no kernel log event):
+    when idle time transitions from > threshold to < 30s, the user woke the display.
+    """
+    was_idle = False
+    print("[wake-monitor] Display-Wake-Watcher gestartet (HIDIdleTime-Polling)", flush=True)
+    while True:
+        idle = get_user_idle_seconds()
+        if idle is not None:
+            if was_idle and idle < 30:
+                _try_trigger("HIDIdleTime display-wake")
+                was_idle = False
+            elif idle > _DISPLAY_SLEEP_THRESHOLD:
+                was_idle = True
+            elif idle > 30:
+                # Still idle but below threshold — don't set was_idle, don't clear it either
+                pass
+            else:
+                # Active — reset flag
+                was_idle = False
+        time.sleep(10)
+
+
+# Start display-wake thread as daemon so it exits with the main process
+_t = threading.Thread(target=display_wake_watcher, daemon=True)
+_t.start()
 
 proc = subprocess.Popen(
     ["log", "stream", "--predicate", 'eventMessage contains "Wake reason"', "--style", "compact"],
@@ -76,17 +143,10 @@ proc = subprocess.Popen(
 
 print("[wake-monitor] Überwache System-Wake-Events...", flush=True)
 
-last_wake = 0.0
 for line in proc.stdout:
     if ("Wake reason" in line
             and "Filtering the log data using" not in line
             and "wifibt" not in line
             and "E_RX_IP_PACKET" not in line
             and "updateWoWReason" not in line):
-        now = time.time()
-        if now - last_wake < COOLDOWN:
-            continue
-        last_wake = now
-        print(f"[wake-monitor] Wake erkannt: {line.strip()}", flush=True)
-        notify_jarvis()
-        last_wake = time.time()  # restart cooldown after blocking call returns
+        _try_trigger(f"log stream: {line.strip()}")

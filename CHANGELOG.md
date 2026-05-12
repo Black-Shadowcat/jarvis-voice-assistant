@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), version
 
 ---
 
+## [2.6.1] — 2026-05-12
+
+### Fixed
+- **Nacht-Greetings stumm schalten** — `wake_notification()` gibt vor 6 Uhr jetzt lautlos zurück. Bisheriger Fehler: Non-Morning-Wake-Pfad (detect_morning_trigger = False, d.h. Stunde < 6) sprach "Willkommen zurück" wenn Debounce abgelaufen war — mitten in der Nacht. Fix: `if datetime.now().hour < 6: update_activity(); return` am Anfang des Non-Morning-Pfads.
+- **Display-Sleep-Wake-Erkennung** — `wake-monitor.py` erkennt jetzt auch reine Display-Schlafs-Wakes (kein System-Sleep), die keinen kernel "Wake reason"-Log-Event erzeugen. Lösung: Daemon-Thread mit HIDIdleTime-Polling alle 10s via `ioreg -c IOHIDSystem`; Transition `idle > 600s → idle < 30s` löst `_try_trigger()` aus. Beide Quellen (log stream + HIDIdleTime) teilen `threading.Lock` + Cooldown-Variable.
+- **Veraltete News im Morgen-Brief** — Dieselben RSS-Artikel wurden täglich im Morgen-Snippet vorgelesen, weil sie nie als gelesen markiert wurden. Fix: Selektion filtert jetzt `not a.get("read")`; nach Verwendung werden Artikel sofort in-memory auf `read=True` gesetzt und via `news.mark_as_read()` ins Archiv geschrieben.
+
+### Technical
+- `_wake_lock = threading.Lock()` + `_try_trigger(label)` in wake-monitor als thread-safe Cooldown-Helper für beide Wake-Quellen
+- `get_user_idle_seconds()` liest `HIDIdleTime`-Nanosekunden aus `ioreg -c IOHIDSystem`
+
+---
+
 ## [2.5.0] — 2026-05-08
 
 ### Added
