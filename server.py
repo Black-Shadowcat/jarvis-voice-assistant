@@ -624,7 +624,7 @@ def build_system_prompt():
     if NEWS_INFO:
         from datetime import timedelta
         cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
-        recent = [a for a in NEWS_INFO if a.get("saved_at", "") >= cutoff]
+        recent = [a for a in NEWS_INFO if a.get("archived_at", a.get("published", "")) >= cutoff]
         pool = recent[:3] if recent else NEWS_INFO[:3]
         headlines = [f"{a.get('source','')}: {a.get('title','')[:65]}" for a in pool if a.get('title')]
         if headlines:
@@ -1811,7 +1811,13 @@ async def _ensure_news() -> None:
     if not NEWS_INFO:
         try:
             archive = await news.get_archive()
-            NEWS_INFO = archive.get("articles", [])[:10]
+            _all = archive.get("articles", [])
+            _unread = [a for a in _all if not a.get("read")]
+            NEWS_INFO = sorted(
+                _unread or _all,
+                key=lambda a: a.get("archived_at", a.get("published", "")),
+                reverse=True
+            )[:10]
             if NEWS_INFO:
                 print(f"[jarvis] RSS on-demand geladen: {len(NEWS_INFO)} Artikel", flush=True)
         except Exception as e:
@@ -2401,7 +2407,13 @@ async def startup_and_refresh():
 
     try:
         archive = await news.get_archive()
-        NEWS_INFO = archive.get("articles", [])[:10]
+        _all = archive.get("articles", [])
+        _unread = [a for a in _all if not a.get("read")]
+        NEWS_INFO = sorted(
+            _unread or _all,
+            key=lambda a: a.get("archived_at", a.get("published", "")),
+            reverse=True
+        )[:10]
         print(f"[jarvis] RSS-Archiv: {len(NEWS_INFO)} Artikel geladen", flush=True)
     except Exception:
         pass

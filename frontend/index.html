@@ -123,6 +123,7 @@ body {
 }
 .popup-btn:hover { opacity:0.85; }
 .popup-btn-primary { background:var(--accent); color:#fff; }
+.popup-btn-ack { background:rgba(42,158,226,0.12); color:var(--accent); border:1px solid rgba(42,158,226,0.28); }
 .popup-btn-close { background:rgba(255,255,255,0.08); color:var(--text); }
 .popup-close-btn {
     position:absolute;
@@ -484,6 +485,7 @@ body {
         <div class="news-popup-meta" id="popup-meta"></div>
         <div class="news-popup-actions">
             <button class="popup-btn popup-btn-primary" onclick="openNewsArticle()" data-i18n="popup_open">Artikel öffnen ↗</button>
+            <button class="popup-btn popup-btn-ack" onclick="markNewsRead()" data-i18n="popup_ack">✓ Zur Kenntnis</button>
             <button class="popup-btn popup-btn-close" onclick="closeNewsPopup()" data-i18n="popup_close">Schließen</button>
         </div>
     </div>
@@ -985,6 +987,15 @@ function openNewsArticle() {
         _newsArticles = _newsArticles.filter(a => a.id !== _currentNewsId);
     }
     if (_currentNewsUrl) window.open(_currentNewsUrl, '_blank');
+    closeNewsPopup();
+    renderNewsPanel();
+}
+
+function markNewsRead() {
+    if (_currentNewsId) {
+        fetch('/api/news/read', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ article_id: _currentNewsId }) }).catch(() => {});
+        _newsArticles = _newsArticles.filter(a => a.id !== _currentNewsId);
+    }
     closeNewsPopup();
     renderNewsPanel();
 }

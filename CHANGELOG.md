@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), version
 
 ---
 
+## [2.6.2] — 2026-05-12
+
+### Fixed
+- **News-Sortierung** — `_ensure_news()` und Startup-Load nahmen `archive[:10]` (älteste zuerst) statt neueste zuerst. Fix: sortiert nach `archived_at` descending, ungelesene bevorzugt. Damit kommen im Morgen-Brief immer aktuelle Artikel, nicht die vom ersten Archiv-Tag.
+- **System-Prompt Datumsfilter** — `build_system_prompt()` filterte auf `saved_at` (existiert im Archiv nicht) → `recent` war immer leer → LLM-Kontext zeigte immer die 3 ältesten Artikel. Fix: auf `archived_at` umgestellt.
+
+### Added
+- **"✓ Zur Kenntnis"-Button** im News-Popup — markiert Artikel als gelesen und entfernt ihn aus dem Panel, ohne den Browser zu öffnen. `popup_ack`-i18n-Key in `de.json`/`en.json` ergänzt.
+
+---
+
 ## [2.6.1] — 2026-05-12
 
 ### Fixed

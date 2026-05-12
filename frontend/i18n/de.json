@@ -15,6 +15,7 @@
   "loading_tasks":       "Aufgaben werden geladen…",
   "news_load_hint":      "↻ Klicke zum Laden",
   "popup_open":          "Artikel öffnen ↗",
+  "popup_ack":           "✓ Zur Kenntnis",
   "popup_close":         "Schließen",
   "empty_mail":          "Keine ungelesenen Mails",
   "empty_tasks":         "Alles erledigt!",

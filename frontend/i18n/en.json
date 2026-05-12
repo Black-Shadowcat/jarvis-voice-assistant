@@ -15,6 +15,7 @@
   "loading_tasks":       "Loading tasks…",
   "news_load_hint":      "↻ Click to load",
   "popup_open":          "Open article ↗",
+  "popup_ack":           "✓ Noted",
   "popup_close":         "Close",
   "empty_mail":          "No unread emails",
   "empty_tasks":         "All done!",
