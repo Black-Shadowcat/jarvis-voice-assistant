@@ -70,6 +70,7 @@
   "news_2":      "Aus Ihren Feeds: Bei {s1} geht es um {t1}. Außerdem bei {s2}: {t2}.",
   "news_1":      "Aus Ihren Feeds: Bei {s1} geht es heute um {t1}.",
   "done":        "Erledigt",
+  "kalender_done": "Verstanden, {address}. Der Termin ist abgehakt.",
   "light_off":   ["Ist aus{sir}.", "Ausgeschaltet{sir}.", "Erledigt{sir}."],
   "light_on":    ["Eingeschaltet{sir}.", "Ist an{sir}.", "Erledigt{sir}."]
 }

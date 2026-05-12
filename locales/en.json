@@ -71,5 +71,6 @@
   "news_1":      "From your feeds: {s1} reports on {t1}.",
   "done":        "Done",
   "light_off":   ["Off{sir}.", "Switched off{sir}.", "Done{sir}."],
-  "light_on":    ["On{sir}.", "Switched on{sir}.", "Done{sir}."]
+  "light_on":    ["On{sir}.", "Switched on{sir}.", "Done{sir}."],
+  "kalender_done": "Understood, {address}. The appointment has been noted as done."
 }

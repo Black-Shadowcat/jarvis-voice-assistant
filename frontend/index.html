@@ -627,7 +627,7 @@ function playNext() {
     }
     isPlaying = true;
     setOrbState('speaking');
-    if (isListening) { recognition.stop(); isListening = false; }
+    if (isListening) { try { recognition.abort(); } catch(_){} isListening = false; }
 
     const b64 = audioQueue.shift();
     const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
@@ -685,7 +685,7 @@ function initSpeechRecognition() {
 function startListening() {
     if (isPlaying || isMuted || !recognition) return;
     try { recognition.start(); isListening = true; }
-    catch(e) { isListening = false; }
+    catch(e) { isListening = false; if (!isPlaying) setTimeout(startListening, 800); }
 }
 
 // ── HUD klickbar — Mute-Toggle ──
@@ -730,6 +730,8 @@ function initWS() {
             addMsg('jarvis', data.text);
             if (data.audio?.length > 0) queueAudio(data.audio);
             else setTimeout(() => { setOrbState('idle'); setTimeout(startListening, 1200); }, 1000);
+        } else if (data.type === 'refresh_tasks') {
+            loadTasks();
         }
     };
     dashboardWs.onclose = () => {

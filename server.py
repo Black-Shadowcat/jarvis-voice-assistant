@@ -182,6 +182,7 @@ daily_brief.set_locale(_L)
 _last_activate_spoken: Optional[datetime] = None
 _last_wake_spoken: Optional[datetime] = None
 _morning_news_text: str = ""  # spoken after morning brief — set in morning trigger path
+_dismissed_cal: set[str] = set()  # calendar event titles dismissed by user this session
 _last_search_url: str = ""        # URL des letzten NEWS_SEARCH-Treffers — für Follow-up-Fragen
 _last_search_published: str = ""  # ISO-Datum des letzten Treffers — für Display-Formatierung
 
@@ -202,7 +203,8 @@ class LichtParameters(BaseModel):
 
 class ActionModel(BaseModel):
     action: Literal[
-        "licht", "reminder_add", "reminder_done", "search", "open", "open_app", "browse",
+        "licht", "reminder_add", "reminder_done", "kalender_done",
+        "search", "open", "open_app", "browse",
         "mail_read", "notiz", "notiz_erledigt", "kalender", "tasks_list",
         "notiz_list", "screen", "news", "news_brief", "news_search", "none"
     ]
@@ -669,7 +671,8 @@ AKTIONEN - Wenn eine Aktion noetig ist, schreibe NUR die Aktion — keinen Text 
 [ACTION:NEWS_BRIEF] - Persoenliche RSS-Feeds abrufen und neue Artikel vorlesen. Nutze diese Aktion wenn {USER_ADDRESS} fragt ob es was Neues gibt, was es Neues aus den persoenlichen Quellen gibt, oder aehnliches.
 [ACTION:NEWS_SEARCH] stichwort - Im persoenlichen RSS-Archiv suchen. Nutze diese Aktion wenn {USER_ADDRESS} fragt "wie war das mit X", "was war da ueber Y" oder nach einem bestimmten Thema im Archiv sucht.
 [ACTION:REMINDER_ADD] aufgabe - Neue Erinnerung in die Inbox schreiben. Nutze diese Aktion wenn {USER_ADDRESS} etwas hinzufuegen, notieren, merken oder erinnert werden moechte.
-[ACTION:REMINDER_DONE] stichwort - Erinnerung als erledigt markieren. Nutze diese Aktion wenn {USER_ADDRESS} sagt dass etwas erledigt, abgehakt oder fertig ist.
+[ACTION:REMINDER_DONE] stichwort - Erinnerung als erledigt markieren. Nutze diese Aktion NUR fuer Apple-Reminders/Aufgaben, NIEMALS fuer Kalendertermine.
+[ACTION:KALENDER_DONE] stichwort - Kalendertermin als erledigt/zur Kenntnis genommen markieren und aus der Anzeige ausblenden. Nutze diese Aktion IMMER wenn {USER_ADDRESS} sagt dass ein Kalendertermin (Lieferung, Arzt, Besprechung, Abholung usw.) stattgefunden hat, erledigt ist oder sich erledigt hat.
 [ACTION:TASKS_LIST] - Aktuelle Aufgabenliste live aus Reminders laden und vorlesen. Nutze diese Aktion IMMER wenn {USER_ADDRESS} fragt welche Aufgaben es gibt, was auf der Liste steht, oder was noch offen ist.
 [ACTION:MAIL_READ] stichwort - Mails lesen. Ohne Stichwort: alle Ungelesenen auflisten. Mit Stichwort (z.B. Absendername): Inhalt der passenden Mail vorlesen.
 [ACTION:KALENDER] zeitraum - Kalendertermine live abrufen. Zeitraum: "heute" (1 Tag), "morgen" (2 Tage), "woche" (7 Tage, Standard), "monat" (30 Tage), "60tage" (60 Tage), oder eine Zahl 1-60. Nutze diese Aktion IMMER wenn {USER_ADDRESS} nach Terminen fragt. Für Fragen wie "was ist am 1. Mai" nutze "woche" oder "monat" je nach Datum. Zeige nur den Titel und das Datum — nenne KEINEN Kalender-Namen, der in eckigen Klammern stehen könnte.
@@ -974,6 +977,18 @@ end tell'''
 
         return f"Erinnerung abgehakt: {', '.join(matches)}"
 
+    elif t == "KALENDER_DONE":
+        global _dismissed_cal
+        keyword = p.replace('"', '').replace("'", "").strip().lower()
+        _dismissed_cal.add(keyword)
+        # Notify all browser clients to refresh the tasks panel
+        for _cws in list(active_connections):
+            try:
+                asyncio.ensure_future(_cws.send_json({"type": "refresh_tasks"}))
+            except Exception:
+                pass
+        return _L.get("kalender_done", "Verstanden, {address}. Der Termin ist abgehakt.").format(address=USER_ADDRESS)
+
     elif t == "LICHT":
         if not HA_URL or not HA_TOKEN:
             return "Home Assistant nicht konfiguriert."
@@ -1126,7 +1141,7 @@ end tell'''
 
 
 # Actions whose result is already a clean, speakable string — no second LLM call needed
-_TEMPLATE_ACTIONS = {"LICHT", "REMINDER_ADD", "REMINDER_DONE", "NOTIZ", "NOTIZ_ERLEDIGT", "OPEN_APP", "NEWS_BRIEF"}
+_TEMPLATE_ACTIONS = {"LICHT", "REMINDER_ADD", "REMINDER_DONE", "KALENDER_DONE", "NOTIZ", "NOTIZ_ERLEDIGT", "OPEN_APP", "NEWS_BRIEF"}
 
 
 async def _speak(ws: WebSocket, session_id: str, text: str, display: str = ""):
@@ -1175,6 +1190,7 @@ def _structured_to_legacy_action(structured: ActionModel) -> Optional[dict]:
         "notiz_list":     ("NOTIZ_LIST",     ""),
         "reminder_add":   ("REMINDER_ADD",   p.get("aufgabe", p.get("text", p.get("payload", "")))),
         "reminder_done":  ("REMINDER_DONE",  p.get("stichwort", p.get("keyword", p.get("payload", "")))),
+        "kalender_done":  ("KALENDER_DONE",  p.get("stichwort", p.get("keyword", p.get("payload", "")))),
         "mail_read":      ("MAIL_READ",      p.get("stichwort", p.get("keyword", p.get("payload", "")))),
         "kalender":       ("KALENDER",       p.get("zeitraum", str(p.get("tage", "woche")))),
         "notiz":          ("NOTIZ",          p.get("text", p.get("payload", ""))),
@@ -1634,9 +1650,12 @@ async def get_tasks():
             title, label = line.split(" -- ", 1)
         else:
             title, label = line, ""
+        title = title.strip()
+        if any(kw in title.lower() for kw in _dismissed_cal):
+            continue
         tasks.append({
             "id": f"cal_{i}",
-            "title": title.strip(),
+            "title": title,
             "label": label.strip(),
             "source": "calendar",
             "completed": None
