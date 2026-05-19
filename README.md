@@ -1,5 +1,9 @@
 # J.A.R.V.I.S. — Personal AI Voice Assistant (macOS v2.4)
 
+> ⚠️ **This repository is no longer maintained.**
+> Development continues in **[Jarvis 2.0](https://github.com/Black-Shadowcat/Jarvis-2.0)** — a complete rewrite with native Tauri app, local Whisper STT, 3 independent microservices, and production-ready autostart.
+> → **[github.com/Black-Shadowcat/Jarvis-2.0](https://github.com/Black-Shadowcat/Jarvis-2.0)**
+
 > **This project is based on the original idea and Windows implementation by [Julian Ivanov](https://github.com/Julian-Ivanov/jarvis-voice-assistant).**
 > What started as a macOS port has grown into a substantially expanded version — with Home Assistant integration, Apple Reminders, Obsidian, a Config UI, a Dashboard, and a new action system. The core concept, personality, and architecture remain Julian's. No support is provided. This fork is maintained for personal use only.
 
